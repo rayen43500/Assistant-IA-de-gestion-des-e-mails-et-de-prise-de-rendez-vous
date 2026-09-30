@@ -1,0 +1,96 @@
+{
+  "name": "Ingestion et Tri Automatique E-mails Cabinet",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "unread"
+        }
+      },
+      "name": "Gmail Trigger / IMAP",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:5000/api/emails/ingest",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sender\": {\n    \"name\": \"{{$json.from.name}}\",\n    \"email\": \"{{$json.from.address}}\"\n  },\n  \"subject\": \"{{$json.subject}}\",\n  \"body\": \"{{$json.snippet}}\",\n  \"clinicId\": \"{{$env.DEFAULT_CLINIC_ID}}\"\n}"
+      },
+      "name": "Transmettre à l'API Backend SaaS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.intent}}",
+              "value2": "EMERGENCY"
+            }
+          ]
+        }
+      },
+      "name": "Est-ce une Urgence ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "message": "ALERTE URGENCE CABINET : Un e-mail critique a été détecté et requiert une intervention humaine immédiate."
+      },
+      "name": "Notification SMS / WhatsApp Praticien",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    }
+  ],
+  "connections": {
+    "Gmail Trigger / IMAP": {
+      "main": [
+        [
+          {
+            "node": "Transmettre à l'API Backend SaaS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transmettre à l'API Backend SaaS": {
+      "main": [
+        [
+          {
+            "node": "Est-ce une Urgence ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Est-ce une Urgence ?": {
+      "main": [
+        [
+          {
+            "node": "Notification SMS / WhatsApp Praticien",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

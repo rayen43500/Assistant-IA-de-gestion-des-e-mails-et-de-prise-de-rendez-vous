@@ -1,0 +1,30 @@
+{
+  "name": "ai-cabinet-assistant-suite",
+  "version": "1.0.0",
+  "description": "Assistant IA de gestion des e-mails et de prise de rendez-vous pour cabinets médicaux et juridiques (Tunisie 2026)",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "test:backend": "npm --prefix backend run test",
+    "health:ai": "curl http://localhost:8000/health",
+    "health:backend": "curl http://localhost:5000/health"
+  },
+  "keywords": [
+    "saas",
+    "ai",
+    "deep-learning",
+    "rag",
+    "fastapi",
+    "express",
+    "react",
+    "n8n",
+    "devsecops",
+    "tunisie"
+  ],
+  "author": "Équipe Projet SaaS IA 2026",
+  "license": "MIT"
+}

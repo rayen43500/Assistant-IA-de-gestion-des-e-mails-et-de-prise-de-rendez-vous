@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # Base de données MongoDB
+  mongo:
+    image: mongo:7.0
+    container_name: cabinet_mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=ai_cabinet_db
+    networks:
+      - cabinet_network
+
+  # Microservice IA (Python FastAPI + Deep Learning + RAG)
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: cabinet_ai_service
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    networks:
+      - cabinet_network
+
+  # Backend REST API (Node.js / Express)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cabinet_backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongo:27017/ai_cabinet_db
+      - JWT_SECRET=super_secret_jwt_key_cabinet_ai_2026
+      - AI_SERVICE_URL=http://ai-service:8000
+      - CORS_ORIGIN=*
+    depends_on:
+      - mongo
+      - ai-service
+    networks:
+      - cabinet_network
+
+  # Frontend Web (React + Vite + Tailwind CSS)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cabinet_frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - cabinet_network
+
+  # Moteur d'automatisation n8n
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: cabinet_n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=CabinetAdmin2026!
+      - DEFAULT_CLINIC_ID=66f1234567890abcdef12345
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows
+    networks:
+      - cabinet_network
+
+  # Supervision Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cabinet_prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - cabinet_network
+
+  # Supervision & Dashboards Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cabinet_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=GrafanaAdmin2026!
+    depends_on:
+      - prometheus
+    networks:
+      - cabinet_network
+
+volumes:
+  mongo_data:
+  n8n_data:
+
+networks:
+  cabinet_network:
+    driver: bridge
