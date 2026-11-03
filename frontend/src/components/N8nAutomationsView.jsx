@@ -29,7 +29,6 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
       trigger: 'Gmail IMAP / Webhook POST',
       frequency: 'Temps réel & Polling 1 min',
       icon: Mail,
-      badgeColor: 'blue',
       nodes: [
         { name: 'Gmail / Webhook Ingest', type: 'Trigger' },
         { name: 'FastAPI Deep Learning', type: 'Classification NLP' },
@@ -44,7 +43,6 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
       trigger: 'Cron Quotidien (08h00 Tunis)',
       frequency: 'Tous les matins à 08:00',
       icon: MessageSquare,
-      badgeColor: 'emerald',
       nodes: [
         { name: 'Cron Schedule 08h00', type: 'Trigger Temporel' },
         { name: 'GET /api/appointments/reminders-due', type: 'Backend Query' },
@@ -59,7 +57,6 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
       trigger: 'Webhook Réservation Confirmée',
       frequency: 'Événementiel à chaque confirmation',
       icon: Calendar,
-      badgeColor: 'purple',
       nodes: [
         { name: 'Webhook Event', type: 'Trigger' },
         { name: 'Google Calendar API', type: 'Création d’événement' },
@@ -73,7 +70,6 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
       trigger: 'Webhook Priorité Haute',
       frequency: 'Immédiat (< 2 secondes)',
       icon: AlertTriangle,
-      badgeColor: 'red',
       nodes: [
         { name: 'Filtre Détection Urgence', type: 'Classification >95%' },
         { name: 'SMS / WhatsApp Prioritaire', type: 'Alerte Téléphone' },
@@ -154,18 +150,18 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Workflow className="w-5 h-5 text-indigo-400" />
+          <h1 className="text-xl font-black text-[#14213D] flex items-center gap-2">
+            <Workflow className="w-5 h-5 text-indigo-600" />
             <span>Moteur d'Automatisation & Workflows n8n</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5">
             Orchestration événementielle des e-mails, alertes WhatsApp et synchronisation d'agenda.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>n8n Conteneur Opérationnel (:5678)</span>
           </div>
 
@@ -173,7 +169,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
             href="http://localhost:5678"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all"
           >
             <span>Ouvrir l'Éditeur n8n</span>
             <ExternalLink className="w-3.5 h-3.5" />
@@ -181,7 +177,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
         </div>
       </div>
 
-      {/* Cartes des 4 Workflows */}
+      {/* Cartes des 4 Workflows (Thème Clair Haute Visibilité) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {workflows.map((wf) => {
           const Icon = wf.icon;
@@ -190,49 +186,49 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
             <div
               key={wf.id}
               onClick={() => setActiveWorkflow(wf.id)}
-              className={`p-5 rounded-2xl glass-card border transition-all cursor-pointer relative overflow-hidden ${
+              className={`p-5 rounded-2xl border transition-all cursor-pointer relative overflow-hidden ${
                 isSelected 
-                  ? 'border-indigo-500/50 bg-indigo-950/20 shadow-md ring-1 ring-indigo-500/30' 
-                  : 'border-slate-800 hover:border-slate-700 hover:bg-slate-900/40'
+                  ? 'border-indigo-600 bg-indigo-50/40 shadow-sm ring-2 ring-indigo-500/20' 
+                  : 'border-[#E5EAF2] bg-white hover:border-slate-300 hover:shadow-xs'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className={`p-2.5 rounded-xl ${
-                    wf.id === '1' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                    wf.id === '2' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                    wf.id === '3' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
-                    'bg-red-500/10 text-red-400 border border-red-500/20'
+                    wf.id === '1' ? 'bg-blue-100 text-blue-700' :
+                    wf.id === '2' ? 'bg-emerald-100 text-emerald-700' :
+                    wf.id === '3' ? 'bg-purple-100 text-purple-700' :
+                    'bg-rose-100 text-rose-700'
                   }`}>
                     <Icon className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-bold text-white">{wf.title}</h2>
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                      <Clock className="w-3 h-3 text-slate-500" />
+                    <h2 className="text-sm font-bold text-slate-900">{wf.title}</h2>
+                    <span className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5 font-medium">
+                      <Clock className="w-3 h-3 text-slate-400" />
                       <span>{wf.frequency}</span>
                     </span>
                   </div>
                 </div>
 
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                   Actif
                 </span>
               </div>
 
-              <p className="text-xs text-slate-300 mt-3 leading-relaxed">
+              <p className="text-xs text-slate-600 mt-3 leading-relaxed">
                 {wf.description}
               </p>
 
               {/* Chaîne des nœuds */}
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center gap-1 overflow-x-auto text-[10px]">
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto text-[10px]">
                 {wf.nodes.map((node, nIdx) => (
                   <React.Fragment key={nIdx}>
-                    <div className="bg-slate-900/90 border border-slate-800 px-2 py-1 rounded-md text-slate-300 font-medium whitespace-nowrap">
+                    <div className="bg-[#F7F9FC] border border-[#E5EAF2] px-2.5 py-1 rounded-md text-slate-700 font-semibold whitespace-nowrap">
                       {node.name}
                     </div>
                     {nIdx < wf.nodes.length - 1 && (
-                      <ArrowRight className="w-3 h-3 text-slate-600 shrink-0" />
+                      <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
                     )}
                   </React.Fragment>
                 ))}
@@ -243,14 +239,14 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
       </div>
 
       {/* Banc de test interactif de simulation n8n */}
-      <div className="glass-panel p-6 rounded-2xl border border-indigo-500/20 space-y-4">
+      <div className="p-6 rounded-2xl bg-white border border-[#E5EAF2] shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Play className="w-4 h-4 text-indigo-400" />
+            <h2 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
+              <Play className="w-4 h-4 text-indigo-600" />
               <span>Banc d'Essai Interactif & Simulation de Déclenchement n8n</span>
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5">
               Simulez la réception d'un événement externe via le webhook n8n et observez la réaction immédiate de l'IA.
             </p>
           </div>
@@ -259,7 +255,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
             <button
               onClick={() => handleRunSimulation('APPOINTMENT')}
               disabled={simulationLoading}
-              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5"
             >
               <Mail className="w-3.5 h-3.5" />
               <span>Simuler Ingestion RDV</span>
@@ -268,7 +264,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
             <button
               onClick={() => handleRunSimulation('EMERGENCY')}
               disabled={simulationLoading}
-              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5"
             >
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Simuler Cas Urgence 190</span>
@@ -277,7 +273,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
             <button
               onClick={() => handleRunSimulation('REMINDER')}
               disabled={simulationLoading}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5"
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Déclencher Rappels 24h</span>
@@ -287,25 +283,25 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
 
         {/* Résultat de simulation */}
         {simulationLoading && (
-          <div className="p-6 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-center gap-3 text-slate-300 text-xs">
-            <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
+          <div className="p-6 rounded-xl bg-[#F7F9FC] border border-slate-200 flex items-center justify-center gap-3 text-slate-600 text-xs font-medium">
+            <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin" />
             <span>Exécution du flux n8n en cours avec classification FastAPI...</span>
           </div>
         )}
 
         {simulationResult && !simulationLoading && (
-          <div className="p-4 rounded-xl bg-slate-900/90 border border-indigo-500/30 space-y-3">
+          <div className="p-4 rounded-xl bg-[#F7F9FC] border border-indigo-200 space-y-3">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-white flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span className="font-bold text-slate-900 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <span>Exécution n8n Réussie : {simulationResult.workflow}</span>
               </span>
-              <span className="text-indigo-400 font-mono text-[11px]">
+              <span className="text-indigo-700 font-mono text-[11px] font-bold">
                 {simulationResult.executionTimeMs ? `${simulationResult.executionTimeMs} ms` : 'Traité avec succès'}
               </span>
             </div>
 
-            <pre className="p-3 rounded-lg bg-black/60 text-slate-300 font-mono text-[11px] overflow-x-auto border border-slate-800">
+            <pre className="p-3 rounded-lg bg-white text-slate-800 font-mono text-[11px] overflow-x-auto border border-slate-200 shadow-2xs">
               {JSON.stringify(simulationResult, null, 2)}
             </pre>
           </div>
@@ -314,32 +310,32 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
 
       {/* Guide & Sécurité DevSecOps n8n */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="glass-panel p-4 rounded-xl border border-slate-800 space-y-1.5">
-          <div className="flex items-center gap-2 text-xs font-bold text-indigo-400">
+        <div className="p-4 rounded-xl bg-white border border-[#E5EAF2] shadow-xs space-y-1.5">
+          <div className="flex items-center gap-2 text-xs font-bold text-indigo-700">
             <Server className="w-4 h-4" />
             <span>Conteneur Dédié n8n</span>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 leading-relaxed">
             Isolation réseau sous <code>cabinet_network</code>. Les identifiants sont injectés via variables d'environnement chiffrées.
           </p>
         </div>
 
-        <div className="glass-panel p-4 rounded-xl border border-slate-800 space-y-1.5">
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+        <div className="p-4 rounded-xl bg-white border border-[#E5EAF2] shadow-xs space-y-1.5">
+          <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
             <ShieldCheck className="w-4 h-4" />
             <span>Tolérance aux Pannes & Fallback</span>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 leading-relaxed">
             Si l'IA ou n8n subit un délai, le mode dégradé du backend garantit qu'aucun e-mail patient n'est perdu.
           </p>
         </div>
 
-        <div className="glass-panel p-4 rounded-xl border border-slate-800 space-y-1.5">
-          <div className="flex items-center gap-2 text-xs font-bold text-blue-400">
+        <div className="p-4 rounded-xl bg-white border border-[#E5EAF2] shadow-xs space-y-1.5">
+          <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
             <Terminal className="w-4 h-4" />
             <span>Import Automatisé</span>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 leading-relaxed">
             Les 4 workflows JSON sont montés dans <code>/workflows</code> et prêts à être activés en un clic ou via script.
           </p>
         </div>
@@ -347,4 +343,3 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
     </div>
   );
 }
-
