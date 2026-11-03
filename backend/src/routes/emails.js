@@ -37,11 +37,16 @@ router.post('/ingest', async (req, res) => {
     const { sender, subject, body, clinicId } = req.body;
 
     const targetClinicId = clinicId || req.body.clinic_id;
-    if (!targetClinicId) {
-      return res.status(400).json({ message: 'clinicId obligatoire' });
+    let clinic = null;
+    
+    if (targetClinicId && targetClinicId.match(/^[0-9a-fA-F]{24}$/)) {
+      clinic = await Clinic.findById(targetClinicId);
+    }
+    
+    if (!clinic) {
+      clinic = await Clinic.findOne();
     }
 
-    const clinic = await Clinic.findById(targetClinicId);
     if (!clinic) {
       return res.status(404).json({ message: 'Cabinet introuvable' });
     }
@@ -66,7 +71,7 @@ router.post('/ingest', async (req, res) => {
     }
 
     const newEmail = await Email.create({
-      clinicId: targetClinicId,
+      clinicId: clinic._id,
       sender: {
         name: sender?.name || 'Patient Inconnu',
         email: sender?.email || 'patient@example.com',
@@ -83,7 +88,7 @@ router.post('/ingest', async (req, res) => {
 
     // Journalisation d'audit
     await AuditLog.create({
-      clinicId: targetClinicId,
+      clinicId: clinic._id,
       action: 'EMAIL_INGESTED_AND_CLASSIFIED',
       resource: 'Email',
       resourceId: newEmail._id.toString(),

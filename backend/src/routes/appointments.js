@@ -93,6 +93,96 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
+// GET /api/appointments/reminders-due - Pour workflow n8n Rappel 24h WhatsApp
+router.get('/reminders-due', async (req, res) => {
+  try {
+    // Calcul de la date de demain si non spécifiée
+    let targetDate = req.query.date;
+    if (!targetDate) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      targetDate = tomorrow.toISOString().split('T')[0];
+    }
+
+    const query = {
+      date: targetDate,
+      status: { $in: ['SCHEDULED', 'CONFIRMED'] },
+      reminderSent24h: { $ne: true },
+    };
+
+    if (req.query.clinicId) {
+      query.clinicId = req.query.clinicId;
+    }
+
+    const dueAppointments = await Appointment.find(query).populate('clinicId', 'name phone address');
+    res.json({
+      targetDate,
+      count: dueAppointments.length,
+      data: dueAppointments,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la récupération des rappels dus', error: error.message });
+  }
+});
+
+// POST /api/appointments/:id/reminder-sent - Marquer le rappel envoyé par n8n
+router.post('/:id/reminder-sent', async (req, res) => {
+  try {
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) {
+      return res.status(404).json({ message: 'Rendez-vous introuvable' });
+    }
+
+    appointment.reminderSent24h = true;
+    await appointment.save();
+
+    await AuditLog.create({
+      clinicId: appointment.clinicId,
+      action: 'N8N_WHATSAPP_REMINDER_SENT_24H',
+      resource: 'Appointment',
+      resourceId: appointment._id.toString(),
+      details: {
+        patient: appointment.patient?.name,
+        phone: appointment.patient?.phone,
+        date: appointment.date,
+        timeSlot: appointment.timeSlot,
+      },
+    });
+
+    res.json({ message: 'Rappel 24h consigné avec succès', appointment });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la mise à jour du rappel', error: error.message });
+  }
+});
+
+// PUT /api/appointments/:id/sync-calendar - Synchroniser ID Calendar depuis n8n
+router.put('/:id/sync-calendar', async (req, res) => {
+  try {
+    const { googleCalendarEventId } = req.body;
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) {
+      return res.status(404).json({ message: 'Rendez-vous introuvable' });
+    }
+
+    if (googleCalendarEventId) {
+      appointment.googleCalendarEventId = googleCalendarEventId;
+    }
+    await appointment.save();
+
+    await AuditLog.create({
+      clinicId: appointment.clinicId,
+      action: 'N8N_CALENDAR_EVENT_SYNCED',
+      resource: 'Appointment',
+      resourceId: appointment._id.toString(),
+      details: { googleCalendarEventId },
+    });
+
+    res.json({ message: 'Événement calendrier synchronisé', appointment });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la synchronisation calendrier', error: error.message });
+  }
+});
+
 // PUT /api/appointments/:id/cancel - Annulation et libération automatique du créneau
 router.put('/:id/cancel', protect, async (req, res) => {
   try {
