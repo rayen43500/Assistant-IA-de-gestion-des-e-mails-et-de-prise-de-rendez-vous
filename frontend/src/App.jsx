@@ -7,6 +7,7 @@ import CalendarView from './components/CalendarView.jsx';
 import KnowledgeView from './components/KnowledgeView.jsx';
 import SettingsView from './components/SettingsView.jsx';
 import DevOpsView from './components/DevOpsView.jsx';
+import N8nAutomationsView from './components/N8nAutomationsView.jsx';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
@@ -309,6 +310,18 @@ export default function App() {
               documents={documents}
               onAddDocument={handleAddDocument}
               onQueryRag={handleQueryRag}
+            />
+          )}
+
+          {currentTab === 'n8n' && (
+            <N8nAutomationsView
+              onSimulateEmail={(newEmail) => {
+                handleSimulateIncomingEmail(newEmail);
+                setAuditLogs(prev => [
+                  { action: 'N8N_WORKFLOW_TRIGGERED', resource: 'Email Automation', timestamp: 'À l\'instant' },
+                  ...prev,
+                ]);
+              }}
             />
           )}
 

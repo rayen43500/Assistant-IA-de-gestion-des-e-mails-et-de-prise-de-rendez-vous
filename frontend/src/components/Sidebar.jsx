@@ -6,6 +6,7 @@ import {
   BookOpen, 
   Sliders, 
   Activity, 
+  Workflow,
   ShieldAlert,
   Sparkles
 } from 'lucide-react';
@@ -22,6 +23,7 @@ export default function Sidebar({ currentTab, onSelectTab, pendingCount, emergen
     },
     { id: 'calendar', label: 'Rendez-vous & Agenda', icon: Calendar },
     { id: 'knowledge', label: 'Base de Connaissances RAG', icon: BookOpen },
+    { id: 'n8n', label: 'Automatisations n8n', icon: Workflow },
     { id: 'settings', label: 'Autonomie IA & Paramètres', icon: Sliders },
     { id: 'devops', label: 'Supervision & DevSecOps', icon: Activity },
   ];
