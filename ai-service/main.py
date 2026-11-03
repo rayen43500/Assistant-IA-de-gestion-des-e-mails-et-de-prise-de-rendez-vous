@@ -125,7 +125,7 @@ def classify_text(subject: str, body: str, clinic_type: str = "MEDICAL"):
 
     # Vérification sécurité injection
     if check_prompt_injection(full_text):
-        return "SPAM", 0.99, "Tentative d'injection bloquée par le pare-feu IA DevSecOps."
+        return "SPAM", 0.99, "Tentative d'injection bloquée par le pare-feu IA DevSecOps.", []
 
     # 1. Détection Prioritaire d'Urgence (Safety First)
     urgencies_found = [k for k in KEYWORDS_EMERGENCY if k in full_text]
