@@ -62,7 +62,10 @@ ai-cabinet-assistant/
 │   ├── vite.config.js
 │   └── Dockerfile
 ├── n8n/
-│   └── workflows/                   # Workflows d'ingestion e-mail & alertes d'urgence
+│   ├── workflows/                   # 4 Workflows complets (Ingestion, Rappels 24h, Calendar, SAMU)
+│   ├── import-workflows.sh          # Script d'importation automatique Docker / Linux
+│   ├── import-workflows.ps1         # Script d'importation automatique PowerShell
+│   └── README.md                    # Guide détaillé d'orchestration n8n
 ├── monitoring/
 │   └── prometheus.yml               # Configuration de scraping des métriques
 ├── docker-compose.yml               # Orchestration complète des conteneurs
@@ -120,7 +123,50 @@ Lors du premier démarrage du backend avec MongoDB, les comptes suivants sont in
 
 ---
 
-## 6. Conformité aux Critères de Réussite (CDC Section 15)
+## 6. Moteur d'Automatisation n8n
+
+Le dossier `n8n/` inclut 4 flux événementiels prêts pour la production :
+1. **`email-ingestion-workflow.json`** : Capture Gmail/IMAP et Webhook, classification NLP, routage selon intention, et alerte WhatsApp d'urgence.
+2. **`appointment-reminder-24h-workflow.json`** : Tâche Cron (08h00 Tunis) qui interroge `/api/appointments/reminders-due`, envoie les rappels WhatsApp aux patients et consigne l'accusé.
+3. **`calendar-sync-workflow.json`** : Synchronisation bidirectionnelle Google Calendar à chaque réservation confirmée.
+4. **`emergency-samu-escalation-workflow.json`** : Procédure immédiate d'escalade d'urgence critique (SAMU 190 / 198 + praticien d'astreinte).
+
+Pour importer automatiquement les workflows dans n8n :
+```bash
+# Avec Docker Compose :
+docker compose exec n8n n8n import:workflow --input=/workflows/email-ingestion-workflow.json
+docker compose exec n8n n8n import:workflow --input=/workflows/appointment-reminder-24h-workflow.json
+docker compose exec n8n n8n import:workflow --input=/workflows/calendar-sync-workflow.json
+docker compose exec n8n n8n import:workflow --input=/workflows/emergency-samu-escalation-workflow.json
+
+# Ou via le script automatique :
+./n8n/import-workflows.sh
+```
+
+---
+
+## 7. Tests et Validation de Conformité
+
+* **Backend Node.js** :
+  ```bash
+  cd backend && npm test
+  ```
+  *(Vérifie les endpoints `/health`, `/metrics`, les requêtes de rappel n8n et l'anti-double réservation).*
+
+* **AI Service FastAPI** :
+  ```bash
+  cd ai-service && pytest test_ai_service.py -v
+  ```
+  *(Valide les 5 classes d'intention, les guardrails anti-injection, l'extraction d'entités tunisiennes et le RAG).*
+
+* **Frontend React** :
+  ```bash
+  cd frontend && npm run build
+  ```
+
+---
+
+## 8. Conformité aux Critères de Réussite (CDC Section 15)
 
 * **Objectif de classification > 90%** : Atteint (**94.2%** d'accuracy, 94.1% F1-Score validé sur le jeu de test).
 * **Temps de traitement moyen** : Inférieur à 30 secondes (inférence moyenne à **~25 ms**).
