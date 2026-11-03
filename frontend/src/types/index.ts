@@ -75,3 +75,4 @@ export interface N8nWorkflowInfo {
   successRate: number;
   totalRuns: number;
 }
+

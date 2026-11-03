@@ -117,3 +117,4 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({ onOpenQuickAppointme
     </header>
   );
 };
+

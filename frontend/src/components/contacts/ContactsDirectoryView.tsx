@@ -139,3 +139,4 @@ export const ContactsDirectoryView: React.FC = () => {
     </div>
   );
 };
+

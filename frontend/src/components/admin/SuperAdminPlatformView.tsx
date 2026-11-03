@@ -141,3 +141,4 @@ export const SuperAdminPlatformView: React.FC = () => {
     </div>
   );
 };
+

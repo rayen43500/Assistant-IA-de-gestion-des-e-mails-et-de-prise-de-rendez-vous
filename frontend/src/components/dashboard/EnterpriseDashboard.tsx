@@ -271,3 +271,4 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
     </div>
   );
 };
+

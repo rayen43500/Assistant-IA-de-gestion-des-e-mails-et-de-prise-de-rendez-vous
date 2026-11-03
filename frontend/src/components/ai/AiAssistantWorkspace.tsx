@@ -219,3 +219,4 @@ export const AiAssistantWorkspace: React.FC = () => {
     </div>
   );
 };
+

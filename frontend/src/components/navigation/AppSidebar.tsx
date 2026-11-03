@@ -165,3 +165,4 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentTab, onSelectTab,
     </aside>
   );
 };
+

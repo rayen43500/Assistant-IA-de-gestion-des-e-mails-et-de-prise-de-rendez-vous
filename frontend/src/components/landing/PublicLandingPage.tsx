@@ -459,3 +459,4 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ onEnterApp
     </div>
   );
 };
+
