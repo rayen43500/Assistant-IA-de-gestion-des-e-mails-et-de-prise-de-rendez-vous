@@ -1,0 +1,131 @@
+{
+  "name": "2. Rappel Automatique de Rendez-vous WhatsApp 24h Avant",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Cron Quotidien (08h00 Tunis)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [180, 260]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trigger-reminders",
+        "options": {}
+      },
+      "name": "Webhook Déclenchement Manuel Test",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [180, 420]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:5000/api/appointments/reminders-due",
+        "method": "GET",
+        "options": {}
+      },
+      "name": "Récupérer RDV du Lendemain non rappelés",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 340]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "name": "Itérer sur chaque Patient",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 2.1,
+      "position": [680, 340]
+    },
+    {
+      "parameters": {
+        "message": "=👋 Bonjour {{ $json.patient.name }},\n\nRappel de votre rendez-vous au cabinet médical/juridique prévu demain le {{ $json.date }} à {{ $json.timeSlot.start }}.\nMotif : {{ $json.reason }}\n\nEn cas d'empêchement, merci de répondre à ce message au plus vite pour libérer le créneau.\nÀ très bientôt,\nL'équipe du Cabinet."
+      },
+      "name": "Envoyer Rappel WhatsApp Patient",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [920, 340]
+    },
+    {
+      "parameters": {
+        "url": "=http://backend:5000/api/appointments/{{ $json._id }}/reminder-sent",
+        "method": "POST",
+        "options": {}
+      },
+      "name": "Marquer Rappel Envoyé dans le Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1160, 340]
+    }
+  ],
+  "connections": {
+    "Cron Quotidien (08h00 Tunis)": {
+      "main": [
+        [
+          {
+            "node": "Récupérer RDV du Lendemain non rappelés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Déclenchement Manuel Test": {
+      "main": [
+        [
+          {
+            "node": "Récupérer RDV du Lendemain non rappelés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Récupérer RDV du Lendemain non rappelés": {
+      "main": [
+        [
+          {
+            "node": "Itérer sur chaque Patient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Itérer sur chaque Patient": {
+      "main": [
+        [
+          {
+            "node": "Envoyer Rappel WhatsApp Patient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer Rappel WhatsApp Patient": {
+      "main": [
+        [
+          {
+            "node": "Marquer Rappel Envoyé dans le Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
+

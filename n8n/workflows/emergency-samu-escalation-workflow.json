@@ -1,0 +1,55 @@
+{
+  "name": "4. Escalade d'Urgence Critique & SAMU Tunisie (190 / 198)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "emergency-alert",
+        "options": {}
+      },
+      "name": "Webhook Alerte Urgence",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "message": "=🚨 ALERTE ROUGE SAMU / CABINET :\nPatient critique détecté par l'IA :\nNom : {{ $json.body.sender?.name || 'Anonyme' }}\nEmail : {{ $json.body.sender?.email }}\nSujet : {{ $json.body.subject }}\nMessage : {{ $json.body.body }}\n\nProcédure SAMU Tunisie : Contacter immédiatement le 190 (SAMU) ou le 198 (Protection Civile) si le patient est en détresse vitale."
+      },
+      "name": "Alerte SMS Direct Praticien",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [460, 220]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:5000/api/ai/daily-summary",
+        "method": "GET",
+        "options": {}
+      },
+      "name": "Vérifier Escalades Actives",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 380]
+    }
+  ],
+  "connections": {
+    "Webhook Alerte Urgence": {
+      "main": [
+        [
+          {
+            "node": "Alerte SMS Direct Praticien",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Vérifier Escalades Actives",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
+

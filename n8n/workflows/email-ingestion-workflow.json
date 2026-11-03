@@ -1,6 +1,17 @@
 {
-  "name": "Ingestion et Tri Automatique E-mails Cabinet",
+  "name": "1. Ingestion et Tri Automatique des E-mails Cabinet (IA + n8n)",
   "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ingest-email",
+        "options": {}
+      },
+      "name": "Webhook Ingestion E-mail",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [180, 240]
+    },
     {
       "parameters": {
         "pollTimes": {
@@ -17,7 +28,7 @@
       "name": "Gmail Trigger / IMAP",
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1,
-      "position": [250, 300]
+      "position": [180, 420]
     },
     {
       "parameters": {
@@ -25,67 +36,121 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"sender\": {\n    \"name\": \"{{$json.from.name}}\",\n    \"email\": \"{{$json.from.address}}\"\n  },\n  \"subject\": \"{{$json.subject}}\",\n  \"body\": \"{{$json.snippet}}\",\n  \"clinicId\": \"{{$env.DEFAULT_CLINIC_ID}}\"\n}"
+        "jsonBody": "={\n  \"sender\": {\n    \"name\": \"{{ $json.body?.sender?.name || $json.from?.name || 'Patient Cabinet' }}\",\n    \"email\": \"{{ $json.body?.sender?.email || $json.from?.address || 'patient@example.tn' }}\"\n  },\n  \"subject\": \"{{ $json.body?.subject || $json.subject || 'Demande patient' }}\",\n  \"body\": \"{{ $json.body?.body || $json.snippet || $json.text || '' }}\",\n  \"clinicId\": \"{{ $env.DEFAULT_CLINIC_ID || '66f1234567890abcdef12345' }}\"\n}"
       },
-      "name": "Transmettre à l'API Backend SaaS",
+      "name": "Microservice Backend Ingestion & IA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [500, 300]
+      "position": [440, 320]
     },
     {
       "parameters": {
         "conditions": {
           "string": [
             {
-              "value1": "={{$json.intent}}",
+              "value1": "={{ $json.intent }}",
               "value2": "EMERGENCY"
             }
           ]
         }
       },
-      "name": "Est-ce une Urgence ?",
+      "name": "Est-ce une Urgence Vitale ?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [750, 300]
+      "position": [680, 320]
     },
     {
       "parameters": {
-        "message": "ALERTE URGENCE CABINET : Un e-mail critique a été détecté et requiert une intervention humaine immédiate."
+        "message": "=🚨 ALERTE URGENCE CRITIQUE CABINET :\nUn e-mail d'urgence vitale a été reçu de {{ $json.sender.name }} ({{ $json.sender.email }}).\nSujet : {{ $json.subject }}\nAction : Protocole SAMU Tunisie 190 / 198 activé automatiquement."
       },
-      "name": "Notification SMS / WhatsApp Praticien",
+      "name": "Alerte WhatsApp Praticien d'Astreinte",
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1,
-      "position": [1000, 200]
+      "position": [940, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.intent }}",
+              "value2": "APPOINTMENT"
+            }
+          ]
+        }
+      },
+      "name": "Est-ce une Demande de RDV ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [940, 420]
+    },
+    {
+      "parameters": {
+        "message": "=📅 NOUVELLE DEMANDE DE RDV :\nPatient : {{ $json.sender.name }}\nDate souhaitée : {{ $json.extractedEntities?.requestedDate || 'À confirmer' }}\nHeure : {{ $json.extractedEntities?.requestedTime || 'À confirmer' }}\nE-mail disponible dans la boîte de validation."
+      },
+      "name": "Notification Secrétariat RDV",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [1180, 360]
     }
   ],
   "connections": {
+    "Webhook Ingestion E-mail": {
+      "main": [
+        [
+          {
+            "node": "Microservice Backend Ingestion & IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Gmail Trigger / IMAP": {
       "main": [
         [
           {
-            "node": "Transmettre à l'API Backend SaaS",
+            "node": "Microservice Backend Ingestion & IA",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Transmettre à l'API Backend SaaS": {
+    "Microservice Backend Ingestion & IA": {
       "main": [
         [
           {
-            "node": "Est-ce une Urgence ?",
+            "node": "Est-ce une Urgence Vitale ?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Est-ce une Urgence ?": {
+    "Est-ce une Urgence Vitale ?": {
       "main": [
         [
           {
-            "node": "Notification SMS / WhatsApp Praticien",
+            "node": "Alerte WhatsApp Praticien d'Astreinte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Est-ce une Demande de RDV ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Est-ce une Demande de RDV ?": {
+      "main": [
+        [
+          {
+            "node": "Notification Secrétariat RDV",
             "type": "main",
             "index": 0
           }

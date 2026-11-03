@@ -1,0 +1,76 @@
+{
+  "name": "3. Synchronisation Agenda Google Calendar",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-calendar-event",
+        "options": {}
+      },
+      "name": "Webhook Rendez-vous Confirmé",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "start": "={{ $json.body.date }}T{{ $json.body.timeSlot.start }}:00",
+        "end": "={{ $json.body.date }}T{{ $json.body.timeSlot.end }}:00",
+        "additionalFields": {
+          "summary": "=RDV Cabinet - {{ $json.body.patient.name }}",
+          "description": "=Patient: {{ $json.body.patient.name }}\nEmail: {{ $json.body.patient.email }}\nTéléphone: {{ $json.body.patient.phone }}\nMotif: {{ $json.body.reason }}\nSource: SaaS IA Cabinet 2026",
+          "attendees": [
+            "={{ $json.body.patient.email }}"
+          ]
+        }
+      },
+      "name": "Créer Événement Google Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "=http://backend:5000/api/appointments/{{ $('Webhook Rendez-vous Confirmé').item.json.body._id }}/sync-calendar",
+        "method": "PUT",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"googleCalendarEventId\": \"{{ $json.id }}\"\n}"
+      },
+      "name": "Mettre à jour ID Calendrier dans Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Rendez-vous Confirmé": {
+      "main": [
+        [
+          {
+            "node": "Créer Événement Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Créer Événement Google Calendar": {
+      "main": [
+        [
+          {
+            "node": "Mettre à jour ID Calendrier dans Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
+

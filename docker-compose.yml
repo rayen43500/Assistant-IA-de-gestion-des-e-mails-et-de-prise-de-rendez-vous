@@ -77,6 +77,12 @@ services:
       - N8N_BASIC_AUTH_USER=admin
       - N8N_BASIC_AUTH_PASSWORD=CabinetAdmin2026!
       - DEFAULT_CLINIC_ID=66f1234567890abcdef12345
+      - GENERIC_TIMEZONE=Africa/Tunis
+      - TZ=Africa/Tunis
+      - N8N_DEFAULT_LOCALE=fr
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_DIAGNOSTICS_ENABLED=false
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/workflows
