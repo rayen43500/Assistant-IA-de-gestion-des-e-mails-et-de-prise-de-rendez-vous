@@ -271,8 +271,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const msg = err.response?.data?.message || err.message || 'Échec de connexion';
       // Mode secours démo si le backend Render est en démarrage à froid
       if (credentials.email && credentials.password) {
+        const isSuperAdmin = credentials.email.toLowerCase().includes('admin');
         const isLegal = credentials.email.toLowerCase().includes('avocat') || credentials.email.toLowerCase().includes('selim');
-        const demoUser: UserProfile = {
+        
+        const demoUser: UserProfile = isSuperAdmin ? {
+          id: 'admin-super-1',
+          name: 'Amine Mansour',
+          email: credentials.email,
+          role: 'SUPER_ADMIN',
+          organizationName: 'MediLawAI Platform Inc.',
+          sector: 'MEDICAL'
+        } : {
           id: `demo-${Date.now()}`,
           name: isLegal ? 'Me. Selim Trabelsi' : 'Dr. Youssef Ben Salem',
           email: credentials.email,

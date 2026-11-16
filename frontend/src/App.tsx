@@ -12,6 +12,7 @@ import { AiAssistantWorkspace } from './components/ai/AiAssistantWorkspace';
 import { AnalyticsReportsView } from './components/analytics/AnalyticsReportsView';
 import { EnterpriseSettingsView } from './components/settings/EnterpriseSettingsView';
 import { SuperAdminPlatformView } from './components/admin/SuperAdminPlatformView';
+import { SuperAdminLayout } from './components/superadmin/SuperAdminLayout';
 import KnowledgeView from './components/KnowledgeView.jsx';
 import N8nAutomationsView from './components/N8nAutomationsView.jsx';
 import { ToastNotification } from './components/common/ToastNotification';
@@ -48,7 +49,7 @@ export default function App() {
     }
   ]);
 
-  const { addEmail, loadEmails, loadAppointments, checkConnection } = useAppStore();
+  const { addEmail, loadEmails, loadAppointments, checkConnection, currentUser } = useAppStore();
 
   useEffect(() => {
     // Connexion automatique et chargement dynamique depuis le backend
@@ -91,6 +92,9 @@ export default function App() {
             setShowAuthModal(true);
           }}
         />
+      ) : currentUser?.role === 'SUPER_ADMIN' || currentTab === 'super-admin' ? (
+        /* Dedicated Premium Super Admin Platform Layout */
+        <SuperAdminLayout onExitSuperAdmin={() => setCurrentTab('dashboard')} />
       ) : (
         /* Authenticated SaaS Professional Workspace */
         <div className="flex h-screen overflow-hidden">
