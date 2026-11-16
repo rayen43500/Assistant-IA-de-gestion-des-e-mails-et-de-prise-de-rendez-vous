@@ -1,5 +1,15 @@
 import { create } from 'zustand';
-import type { SectorType, UserProfile, EmailItem, AppointmentItem, ClientContact, N8nWorkflowInfo } from '../types';
+import type { 
+  SectorType, 
+  UserProfile, 
+  EmailItem, 
+  AppointmentItem, 
+  ClientContact, 
+  N8nWorkflowInfo,
+  AvailabilitySettings,
+  DaySchedule,
+  UnavailablePeriod
+} from '../types';
 import { 
   API_BASE_URL,
   apiFetchEmails, 
@@ -57,6 +67,11 @@ interface AppStore {
   updateContact: (id: string, updates: Partial<ClientContact>) => void;
   deleteContact: (id: string) => void;
   workflows: N8nWorkflowInfo[];
+
+  // Availability & Scheduling Configuration
+  availabilitySettings: AvailabilitySettings;
+  updateAvailabilitySettings: (settings: Partial<AvailabilitySettings>) => void;
+  isSlotAvailable: (date: string, time: string) => { available: boolean; reason?: string };
 
   // AI Autonomy Settings
   aiAutonomyLevel: 'HUMAN_IN_THE_LOOP' | 'SUGGEST_ONLY' | 'FULL_AUTONOMOUS';
@@ -213,6 +228,25 @@ const initialWorkflows: N8nWorkflowInfo[] = [
   { id: 'wf-3', name: 'Synchronisation Google Calendar', description: 'Génération instantanée d’événement Calendar avec invitations participants.', trigger: 'Webhook Réservation', status: 'ACTIVE', lastRun: 'Il y a 14 min', successRate: 100, totalRuns: 650 },
   { id: 'wf-4', name: 'Escalade SAMU & Protection Civile', description: 'Alerte SMS immédiate au médecin de garde et consigne vitale 190.', trigger: 'Webhook Alerte Haute', status: 'ACTIVE', lastRun: 'Ce matin 08:30', successRate: 100, totalRuns: 45 }
 ];
+
+export const initialAvailabilitySettings: AvailabilitySettings = {
+  onlineBookingEnabled: true,
+  consultationDuration: 30,
+  bufferTime: 5,
+  daysSchedule: [
+    { day: 'Lundi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
+    { day: 'Mardi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
+    { day: 'Mercredi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
+    { day: 'Jeudi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
+    { day: 'Vendredi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
+    { day: 'Samedi', active: true, start: '08:30', end: '13:00', hasBreak: false, breakStart: '12:00', breakEnd: '13:00' },
+    { day: 'Dimanche', active: false, start: '09:00', end: '12:00', hasBreak: false, breakStart: '12:00', breakEnd: '13:00' }
+  ],
+  unavailablePeriods: [
+    { id: 1, title: 'Congés Annuels d’Hiver', start: '2026-12-24', end: '2026-12-31', type: 'VACATION' },
+    { id: 2, title: 'Astreinte Garde SAMU 190', start: '2026-11-15', end: '2026-11-16', type: 'EMERGENCY_DUTY' }
+  ]
+};
 
 export const useAppStore = create<AppStore>((set, get) => ({
   backendUrl: API_BASE_URL,
@@ -420,6 +454,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
 
     // Fallback simulation locale si le serveur distant est en veille
+    const isUrgent = emailPayload.subject.toLowerCase().includes('urgent') || emailPayload.body.toLowerCase().includes('douleur') || emailPayload.body.toLowerCase().includes('urgence');
+    const lowerBody = (emailPayload.subject + ' ' + emailPayload.body).toLowerCase();
+    
+    // AI Knowledge of Availability & Lunch Break
+    let draftReply = `Bonjour,\n\nNous avons bien reçu votre demande concernant "${emailPayload.subject}". Le secrétariat confirme la prise en charge.\n\nBien cordialement,\nCabinet Dr. Ben Salem`;
+    
+    if (isUrgent) {
+      draftReply = `🚨 ALERTE URGENCE VITALE : Vos symptômes requièrent une prise en charge médicale immédiate. Veuillez contacter le SAMU (190) ou vous présenter au service des urgences le plus proche. Le praticien a été notifié par SMS.`;
+    } else if (lowerBody.includes('12h30') || lowerBody.includes('13h') || lowerBody.includes('13:00') || lowerBody.includes('13:30') || lowerBody.includes('pause')) {
+      draftReply = `Bonjour,\n\nNous avons bien reçu votre demande de consultation. Veuillez noter que le praticien est en pause déjeuner entre 12:30 et 14:00 selon la grille officielle du cabinet.\n\nNous vous proposons un rendez-vous le même jour à 14:00 ou à 11:30 (durée : ${get().availabilitySettings.consultationDuration} min). Souhaitez-vous que nous validions ce créneau sur Google Calendar ?\n\nBien cordialement,\nLe secrétariat du Cabinet`;
+    } else if (lowerBody.includes('dimanche')) {
+      draftReply = `Bonjour,\n\nLe cabinet est fermé le dimanche. Nos horaires de consultation sont du Lundi au Vendredi de 08:30 à 17:30 (pause déjeuner 12:30 - 14:00).\n\nNous vous proposons un créneau dès lundi à 09:00. Souhaitez-vous confirmer ?\n\nBien cordialement,\nLe secrétariat`;
+    } else if (lowerBody.includes('rdv') || lowerBody.includes('rendez-vous') || lowerBody.includes('consultation')) {
+      draftReply = `Bonjour,\n\nNous confirmons qu'un créneau de consultation (${get().availabilitySettings.consultationDuration} min) est disponible dans la plage d'ouverture du cabinet (08:30 - 17:30). Souhaitez-vous que nous bloquions ce créneau avec rappel WhatsApp ?\n\nBien cordialement,\nLe secrétariat`;
+    }
+
     const fallbackEmail: EmailItem = {
       id: `sim-${Date.now()}`,
       sender: emailPayload.sender,
@@ -427,12 +477,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       body: emailPayload.body,
       receivedAt: 'À l’instant',
       isRead: false,
-      intent: emailPayload.subject.toLowerCase().includes('urgent') ? 'EMERGENCY' : 'APPOINTMENT',
-      priority: emailPayload.subject.toLowerCase().includes('urgent') ? 'CRITICAL' : 'HIGH',
-      status: emailPayload.subject.toLowerCase().includes('urgent') ? 'ESCALATED_EMERGENCY' : 'PENDING_VALIDATION',
+      intent: isUrgent ? 'EMERGENCY' : 'APPOINTMENT',
+      priority: isUrgent ? 'CRITICAL' : 'HIGH',
+      status: isUrgent ? 'ESCALATED_EMERGENCY' : 'PENDING_VALIDATION',
       confidence: 0.96,
-      draftReply: `Bonjour,\nNous avons bien reçu votre demande concernant "${emailPayload.subject}". Le secrétariat confirme la prise en charge.\nBien cordialement,\nCabinet Dr. Ben Salem`,
-      folder: 'inbox'
+      draftReply,
+      folder: isUrgent ? 'urgent' : 'inbox'
     };
     set((state) => ({ emails: [fallbackEmail, ...state.emails] }));
   },
@@ -502,6 +552,62 @@ export const useAppStore = create<AppStore>((set, get) => ({
     contacts: state.contacts.filter((c) => c.id !== id)
   })),
   workflows: initialWorkflows,
+
+  availabilitySettings: initialAvailabilitySettings,
+  updateAvailabilitySettings: (newSettings) => set((state) => ({
+    availabilitySettings: { ...state.availabilitySettings, ...newSettings }
+  })),
+
+  isSlotAvailable: (date: string, time: string) => {
+    const { availabilitySettings, appointments } = get();
+
+    // 1. Periodes fermees / conges
+    const blockedPeriod = availabilitySettings.unavailablePeriods.find(
+      (p) => date >= p.start && date <= p.end
+    );
+    if (blockedPeriod) {
+      return { available: false, reason: `Cabinet fermé : ${blockedPeriod.title}` };
+    }
+
+    // 2. Jour de la semaine
+    const dateObj = new Date(date + 'T00:00:00');
+    const dayNames = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    const currentDayName = dayNames[dateObj.getDay()];
+    const dayConfig = availabilitySettings.daysSchedule.find((d) => d.day === currentDayName);
+
+    if (!dayConfig || !dayConfig.active) {
+      return { available: false, reason: `Le cabinet est fermé le ${currentDayName}.` };
+    }
+
+    // 3. Plages d'ouverture
+    if (time < dayConfig.start || time >= dayConfig.end) {
+      return { 
+        available: false, 
+        reason: `En dehors des horaires de présence (${dayConfig.start} - ${dayConfig.end}).` 
+      };
+    }
+
+    // 4. Pause dejeuner
+    if (dayConfig.hasBreak && time >= dayConfig.breakStart && time < dayConfig.breakEnd) {
+      return { 
+        available: false, 
+        reason: `Pause Déjeuner du praticien (${dayConfig.breakStart} - ${dayConfig.breakEnd}).` 
+      };
+    }
+
+    // 5. Anti double reservation
+    const conflict = appointments.find(
+      (a) => a.date === date && a.timeStart === time && a.status !== 'CANCELLED'
+    );
+    if (conflict) {
+      return { 
+        available: false, 
+        reason: `Créneau déjà réservé par un patient (${conflict.patientName}).` 
+      };
+    }
+
+    return { available: true };
+  },
 
   aiAutonomyLevel: 'HUMAN_IN_THE_LOOP',
   setAiAutonomyLevel: (aiAutonomyLevel) => set({ aiAutonomyLevel }),

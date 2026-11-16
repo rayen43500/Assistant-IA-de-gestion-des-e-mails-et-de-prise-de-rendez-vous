@@ -76,3 +76,30 @@ export interface N8nWorkflowInfo {
   totalRuns: number;
 }
 
+export interface DaySchedule {
+  day: string;
+  active: boolean;
+  start: string;
+  end: string;
+  hasBreak: boolean;
+  breakStart: string;
+  breakEnd: string;
+}
+
+export interface UnavailablePeriod {
+  id: string | number;
+  title: string;
+  start: string;
+  end: string;
+  type: 'VACATION' | 'EMERGENCY_DUTY' | 'CONGRESS' | 'OTHER';
+}
+
+export interface AvailabilitySettings {
+  onlineBookingEnabled: boolean;
+  consultationDuration: number; // 15, 30, 45, 60
+  bufferTime: number; // 0, 5, 10, 15
+  daysSchedule: DaySchedule[];
+  unavailablePeriods: UnavailablePeriod[];
+}
+
+

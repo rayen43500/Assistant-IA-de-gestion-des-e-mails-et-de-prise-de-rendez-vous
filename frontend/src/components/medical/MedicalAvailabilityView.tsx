@@ -12,31 +12,21 @@ import {
   ShieldCheck,
   Zap,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Bot,
+  Sparkles
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 
 export const MedicalAvailabilityView: React.FC = () => {
-  const { showToast } = useAppStore();
+  const { availabilitySettings, updateAvailabilitySettings, showToast } = useAppStore();
 
-  const [onlineBookingEnabled, setOnlineBookingEnabled] = useState(true);
-  const [consultationDuration, setConsultationDuration] = useState<number>(30);
-  const [bufferTime, setBufferTime] = useState<number>(5); // 5 min entre 2 consultations
+  const [onlineBookingEnabled, setOnlineBookingEnabled] = useState(availabilitySettings.onlineBookingEnabled);
+  const [consultationDuration, setConsultationDuration] = useState<number>(availabilitySettings.consultationDuration);
+  const [bufferTime, setBufferTime] = useState<number>(availabilitySettings.bufferTime); // 0, 5, 10, 15 min entre consultations
 
-  const [daysSchedule, setDaysSchedule] = useState([
-    { day: 'Lundi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
-    { day: 'Mardi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
-    { day: 'Mercredi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
-    { day: 'Jeudi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
-    { day: 'Vendredi', active: true, start: '08:30', end: '17:30', hasBreak: true, breakStart: '12:30', breakEnd: '14:00' },
-    { day: 'Samedi', active: true, start: '08:30', end: '13:00', hasBreak: false, breakStart: '12:00', breakEnd: '13:00' },
-    { day: 'Dimanche', active: false, start: '09:00', end: '12:00', hasBreak: false, breakStart: '12:00', breakEnd: '13:00' }
-  ]);
-
-  const [unavailablePeriods, setUnavailablePeriods] = useState([
-    { id: 1, title: 'Congés Annuels d’Hiver', start: '2026-12-24', end: '2026-12-31', type: 'VACATION' },
-    { id: 2, title: 'Astreinte Garde SAMU 190', start: '2026-11-15', end: '2026-11-16', type: 'EMERGENCY_DUTY' }
-  ]);
+  const [daysSchedule, setDaysSchedule] = useState(availabilitySettings.daysSchedule);
+  const [unavailablePeriods, setUnavailablePeriods] = useState(availabilitySettings.unavailablePeriods);
 
   const [newPeriodTitle, setNewPeriodTitle] = useState('');
   const [newPeriodStart, setNewPeriodStart] = useState('');
@@ -53,28 +43,45 @@ export const MedicalAvailabilityView: React.FC = () => {
   const handleAddUnavailable = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPeriodTitle || !newPeriodStart || !newPeriodEnd) return;
-    setUnavailablePeriods(prev => [
-      ...prev,
-      { id: Date.now(), title: newPeriodTitle, start: newPeriodStart, end: newPeriodEnd, type: 'VACATION' }
-    ]);
+    const newP = { id: Date.now(), title: newPeriodTitle, start: newPeriodStart, end: newPeriodEnd, type: 'VACATION' as const };
+    const updated = [...unavailablePeriods, newP];
+    setUnavailablePeriods(updated);
     setNewPeriodTitle('');
     setNewPeriodStart('');
     setNewPeriodEnd('');
+
+    updateAvailabilitySettings({ unavailablePeriods: updated });
+
     showToast({
       title: 'Période d’indisponibilité bloquée',
-      message: 'Ces dates sont désormais verrouillées sur Google Calendar et inaccessibles aux patients.',
+      message: 'Ces dates sont verrouillées sur Google Calendar et transmises à l’IA.',
       type: 'info'
     });
   };
 
-  const handleRemovePeriod = (id: number) => {
-    setUnavailablePeriods(prev => prev.filter(p => p.id !== id));
+  const handleRemovePeriod = (id: number | string) => {
+    const updated = unavailablePeriods.filter(p => p.id !== id);
+    setUnavailablePeriods(updated);
+    updateAvailabilitySettings({ unavailablePeriods: updated });
+    showToast({
+      title: 'Période débloquée',
+      message: 'Les créneaux de cette période redeviennent réservables.',
+      type: 'info'
+    });
   };
 
   const handleSave = () => {
+    updateAvailabilitySettings({
+      onlineBookingEnabled,
+      consultationDuration,
+      bufferTime,
+      daysSchedule,
+      unavailablePeriods
+    });
+
     showToast({
-      title: 'Planning hebdomadaire synchronisé !',
-      message: 'Les nouveaux créneaux ont été transmis à Google Calendar et au moteur de réservation n8n.',
+      title: 'Disponibilités Enregistrées & Diffusées !',
+      message: 'Le calendrier, la prise de RDV patient et le moteur d’IA ont été synchronisés avec vos créneaux et pauses.',
       type: 'success'
     });
   };
@@ -99,6 +106,33 @@ export const MedicalAvailabilityView: React.FC = () => {
         </button>
       </div>
 
+      {/* Sync Status Banner */}
+      <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+            <Bot className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="font-bold text-[#14213D] flex items-center gap-2">
+              <span>Synchronisation Calendrier & Assistant IA Active</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            </div>
+            <p className="text-slate-600 text-[11px]">
+              L'IA connaît vos pauses déjeuner (12:30 - 14:00), les jours fermés et adapte automatiquement les propositions de RDV.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] font-bold text-blue-700 bg-white px-3 py-1 rounded-full border border-blue-200 shadow-2xs">
+            Durée : {consultationDuration} min + {bufferTime} min battement
+          </span>
+          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/60 px-3 py-1 rounded-full border border-emerald-200">
+            Anti-Double Réservation OK
+          </span>
+        </div>
+      </div>
+
       {/* Online Booking & Consultation Duration Settings */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Toggle Online Booking */}
@@ -121,223 +155,235 @@ export const MedicalAvailabilityView: React.FC = () => {
           </button>
         </div>
 
-        {/* Duration Selector */}
+        {/* Consultation Duration */}
         <div className="p-5 bg-white rounded-2xl border border-[#E8EDF4] shadow-xs space-y-2">
           <div className="text-xs font-bold text-[#14213D] flex items-center gap-2">
-            <Clock className="w-4 h-4 text-purple-600" />
+            <Clock className="w-4 h-4 text-[#2563EB]" />
             <span>Durée Moyenne de Consultation</span>
           </div>
-          <div className="flex items-center gap-2 pt-1">
-            {[15, 30, 45, 60].map(m => (
+          <p className="text-[11px] text-slate-500">Créneau standard affecté dans l’agenda</p>
+
+          <div className="grid grid-cols-4 gap-1.5 pt-1">
+            {[15, 30, 45, 60].map(duration => (
               <button
-                key={m}
-                onClick={() => setConsultationDuration(m)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  consultationDuration === m
+                key={duration}
+                onClick={() => setConsultationDuration(duration)}
+                className={`py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  consultationDuration === duration
                     ? 'bg-[#2563EB] text-white shadow-2xs'
-                    : 'bg-[#F7F9FC] border border-[#E8EDF4] text-slate-600 hover:bg-slate-100'
+                    : 'bg-[#F7F9FC] text-slate-600 hover:bg-slate-100 border border-[#E8EDF4]'
                 }`}
               >
-                {m} min
+                {duration} min
               </button>
             ))}
           </div>
         </div>
 
-        {/* Buffer Time between appointments */}
+        {/* Buffer Time */}
         <div className="p-5 bg-white rounded-2xl border border-[#E8EDF4] shadow-xs space-y-2">
           <div className="text-xs font-bold text-[#14213D] flex items-center gap-2">
-            <Coffee className="w-4 h-4 text-amber-500" />
+            <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
             <span>Temps de Désinfection / Battement</span>
           </div>
-          <div className="flex items-center gap-2 pt-1">
-            {[0, 5, 10, 15].map(b => (
+          <p className="text-[11px] text-slate-500">Intervalle de respiration entre deux consultations</p>
+
+          <div className="grid grid-cols-4 gap-1.5 pt-1">
+            {[0, 5, 10, 15].map(buffer => (
               <button
-                key={b}
-                onClick={() => setBufferTime(b)}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  bufferTime === b
-                    ? 'bg-amber-600 text-white shadow-2xs'
-                    : 'bg-[#F7F9FC] border border-[#E8EDF4] text-slate-600 hover:bg-slate-100'
+                key={buffer}
+                onClick={() => setBufferTime(buffer)}
+                className={`py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  bufferTime === buffer
+                    ? 'bg-[#2563EB] text-white shadow-2xs'
+                    : 'bg-[#F7F9FC] text-slate-600 hover:bg-slate-100 border border-[#E8EDF4]'
                 }`}
               >
-                {b} min
+                {buffer} min
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Weekly Schedule Visual Editor */}
-      <div className="bg-white rounded-2xl border border-[#E8EDF4] shadow-xs p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-[#E8EDF4] pb-3">
+      {/* Weekly Schedule Grid */}
+      <div className="bg-white rounded-2xl border border-[#E8EDF4] shadow-xs p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-[#E8EDF4] pb-4">
           <div>
             <h2 className="text-sm font-bold text-[#14213D]">Plages Horaires d’Ouverture du Cabinet</h2>
-            <p className="text-xs text-slate-400">Configurez les heures de présence et la pause déjeuner pour chaque jour</p>
+            <p className="text-xs text-slate-500">Configurez les heures de présence et la pause déjeuner pour chaque jour</p>
           </div>
-          <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-            Protection Anti-Double Réservation Active
-          </span>
+
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>Protection Anti-Double Réservation Active</span>
+          </div>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="space-y-3">
           {daysSchedule.map((d, idx) => (
-            <div key={d.day} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              {/* Day checkbox */}
-              <div className="flex items-center gap-3 w-40">
-                <input
-                  type="checkbox"
-                  id={`day-${idx}`}
-                  checked={d.active}
-                  onChange={() => handleToggleDay(idx)}
-                  className="w-4 h-4 rounded text-[#2563EB] focus:ring-[#2563EB]"
-                />
-                <label htmlFor={`day-${idx}`} className={`text-xs font-bold cursor-pointer ${d.active ? 'text-[#14213D]' : 'text-slate-400 line-through'}`}>
-                  {d.day}
-                </label>
+            <div
+              key={d.day}
+              className={`p-4 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                d.active ? 'bg-white border-[#E8EDF4] shadow-2xs' : 'bg-slate-50/70 border-slate-200 opacity-60'
+              }`}
+            >
+              <div className="flex items-center gap-4 min-w-[140px]">
+                <button
+                  onClick={() => handleToggleDay(idx)}
+                  className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs transition-colors ${
+                    d.active ? 'bg-[#2563EB] text-white' : 'bg-slate-200 text-slate-400'
+                  }`}
+                >
+                  {d.active ? '✓' : '✕'}
+                </button>
+                <div>
+                  <span className={`text-xs font-bold ${d.active ? 'text-[#14213D]' : 'text-slate-400'}`}>
+                    {d.day}
+                  </span>
+                  <div className="text-[10px] text-slate-400">
+                    {d.active ? 'Ouvert' : 'Fermé'}
+                  </div>
+                </div>
               </div>
 
-              {/* Working hours inputs */}
               {d.active ? (
-                <div className="flex flex-wrap items-center gap-3 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-slate-400 text-[11px]">De</span>
+                <div className="flex flex-wrap items-center gap-4 text-xs">
+                  {/* Working Hours */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 font-medium">De</span>
                     <input
                       type="time"
                       value={d.start}
                       onChange={e => handleTimeChange(idx, 'start', e.target.value)}
-                      className="px-2.5 py-1.5 bg-[#F7F9FC] border border-[#E8EDF4] rounded-lg font-mono font-semibold text-slate-800"
+                      className="px-2.5 py-1 bg-[#F7F9FC] border border-[#E8EDF4] rounded-lg text-xs font-mono font-semibold text-[#14213D]"
                     />
-                    <span className="text-slate-400 text-[11px]">à</span>
+                    <span className="text-slate-500 font-medium">à</span>
                     <input
                       type="time"
                       value={d.end}
                       onChange={e => handleTimeChange(idx, 'end', e.target.value)}
-                      className="px-2.5 py-1.5 bg-[#F7F9FC] border border-[#E8EDF4] rounded-lg font-mono font-semibold text-slate-800"
+                      className="px-2.5 py-1 bg-[#F7F9FC] border border-[#E8EDF4] rounded-lg text-xs font-mono font-semibold text-[#14213D]"
                     />
                   </div>
 
-                  {/* Pause déjeuner */}
-                  {d.hasBreak && (
-                    <div className="flex items-center gap-1.5 pl-3 border-l border-slate-200 text-slate-500">
-                      <Coffee className="w-3.5 h-3.5 text-amber-500" />
-                      <span className="text-[11px]">Pause :</span>
-                      <input
-                        type="time"
-                        value={d.breakStart}
-                        onChange={e => handleTimeChange(idx, 'breakStart', e.target.value)}
-                        className="px-2 py-1 bg-[#F7F9FC] border border-[#E8EDF4] rounded-lg font-mono text-[11px]"
-                      />
-                      <span className="text-[11px]">-</span>
-                      <input
-                        type="time"
-                        value={d.breakEnd}
-                        onChange={e => handleTimeChange(idx, 'breakEnd', e.target.value)}
-                        className="px-2 py-1 bg-[#F7F9FC] border border-[#E8EDF4] rounded-lg font-mono text-[11px]"
-                      />
-                    </div>
-                  )}
+                  {/* Lunch Break */}
+                  <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                    <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="text-slate-500 font-medium">Pause :</span>
+                    <input
+                      type="time"
+                      value={d.breakStart}
+                      onChange={e => handleTimeChange(idx, 'breakStart', e.target.value)}
+                      className="px-2 py-1 bg-amber-50/50 border border-amber-200 rounded-lg text-xs font-mono text-amber-900"
+                    />
+                    <span className="text-slate-400">-</span>
+                    <input
+                      type="time"
+                      value={d.breakEnd}
+                      onChange={e => handleTimeChange(idx, 'breakEnd', e.target.value)}
+                      className="px-2 py-1 bg-amber-50/50 border border-amber-200 rounded-lg text-xs font-mono text-amber-900"
+                    />
+                  </div>
                 </div>
               ) : (
-                <div className="text-xs text-slate-400 italic">
-                  Cabinet fermé au public
-                </div>
+                <span className="text-xs text-slate-400 italic">Aucune consultation assurée ce jour</span>
               )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Holidays and Unavailable Periods */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* List of unavailable periods (2 Cols) */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E8EDF4] shadow-xs p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[#2563EB]" />
-              <span>Congés Annuels & Périodes d’Indisponibilité</span>
-            </h2>
-            <span className="text-xs text-slate-400">{unavailablePeriods.length} période(s) bloquée(s)</span>
-          </div>
-
-          <div className="divide-y divide-slate-100">
-            {unavailablePeriods.map(p => (
-              <div key={p.id} className="py-3 flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-[#14213D]">{p.title}</div>
-                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                    Du {p.start} au {p.end}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    p.type === 'EMERGENCY_DUTY' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-700'
-                  }`}>
-                    {p.type === 'EMERGENCY_DUTY' ? 'Garde Urgence' : 'Congés Praticien'}
-                  </span>
-                  <button
-                    onClick={() => handleRemovePeriod(p.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+      {/* Vacations & Unavailable Periods */}
+      <div className="bg-white rounded-2xl border border-[#E8EDF4] shadow-xs p-6 space-y-5">
+        <div className="flex items-center justify-between border-b border-[#E8EDF4] pb-4">
+          <div>
+            <h2 className="text-sm font-bold text-[#14213D]">Congés, Astreintes et Indisponibilités</h2>
+            <p className="text-xs text-slate-500">Verrouillage de périodes complètes (vacances, congrès, gardes SAMU)</p>
           </div>
         </div>
 
-        {/* Add Period Form (1 Col) */}
-        <div className="bg-white rounded-2xl border border-[#E8EDF4] shadow-xs p-6 space-y-4">
-          <h2 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
-            <Plus className="w-4 h-4 text-[#2563EB]" />
-            <span>Bloquer une Période</span>
-          </h2>
+        {/* Existing Periods */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {unavailablePeriods.map(p => (
+            <div
+              key={p.id}
+              className="p-4 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] flex items-center justify-between gap-3 shadow-2xs"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-[#14213D]">{p.title}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    p.type === 'EMERGENCY_DUTY' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {p.type === 'EMERGENCY_DUTY' ? 'Garde SAMU' : 'Congé'}
+                  </span>
+                </div>
+                <div className="text-[11px] font-mono text-slate-500 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Du {p.start} au {p.end}</span>
+                </div>
+              </div>
 
-          <form onSubmit={handleAddUnavailable} className="space-y-3 text-xs">
+              <button
+                onClick={() => handleRemovePeriod(p.id)}
+                className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition-colors"
+                title="Supprimer la période"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add Period Form */}
+        <form onSubmit={handleAddUnavailable} className="p-4 bg-slate-50/60 rounded-2xl border border-dashed border-slate-300 space-y-3">
+          <div className="text-xs font-bold text-slate-700">Bloquer une nouvelle période d’absence</div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Motif du Blocage</label>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Motif de l’absence</label>
               <input
                 type="text"
                 required
-                placeholder="Ex: Séminaire Cardiologie Tunis"
+                placeholder="ex: Participation Congrès Médical"
                 value={newPeriodTitle}
                 onChange={e => setNewPeriodTitle(e.target.value)}
-                className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl focus:outline-none focus:border-[#2563EB]"
+                className="w-full px-3 py-1.5 bg-white border border-[#E8EDF4] rounded-xl text-xs"
               />
             </div>
-
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Date de Début</label>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Date de début</label>
               <input
                 type="date"
                 required
                 value={newPeriodStart}
                 onChange={e => setNewPeriodStart(e.target.value)}
-                className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl focus:outline-none focus:border-[#2563EB]"
+                className="w-full px-3 py-1.5 bg-white border border-[#E8EDF4] rounded-xl text-xs"
               />
             </div>
-
             <div>
-              <label className="block font-bold text-slate-700 mb-1">Date de Fin</label>
+              <label className="block text-[11px] font-semibold text-slate-600 mb-1">Date de fin</label>
               <input
                 type="date"
                 required
                 value={newPeriodEnd}
                 onChange={e => setNewPeriodEnd(e.target.value)}
-                className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl focus:outline-none focus:border-[#2563EB]"
+                className="w-full px-3 py-1.5 bg-white border border-[#E8EDF4] rounded-xl text-xs"
               />
             </div>
+          </div>
 
+          <div className="flex justify-end pt-2">
             <button
               type="submit"
-              className="w-full py-2 bg-[#14213D] hover:bg-slate-800 text-white rounded-xl font-bold shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#14213D] text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors"
             >
-              Verrouiller le Calendrier
+              <Plus className="w-3.5 h-3.5" />
+              Bloquer ces Dates
             </button>
-          </form>
-        </div>
+          </div>
+        </form>
       </div>
     </div>
   );

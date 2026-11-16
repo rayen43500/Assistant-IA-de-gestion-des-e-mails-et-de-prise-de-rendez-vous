@@ -15,13 +15,27 @@ import {
   Mail,
   Edit2,
   Trash2,
-  XCircle
+  XCircle,
+  Coffee,
+  Bot
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 import type { AppointmentItem } from '../../types';
 
 export const AppointmentCalendarView: React.FC = () => {
-  const { sector, appointments, addAppointment, updateAppointment, cancelAppointment, deleteAppointment, confirmAppointment, showToast } = useAppStore();
+  const { 
+    sector, 
+    appointments, 
+    addAppointment, 
+    updateAppointment, 
+    cancelAppointment, 
+    deleteAppointment, 
+    confirmAppointment, 
+    availabilitySettings,
+    isSlotAvailable,
+    showToast 
+  } = useAppStore();
+
   const [selectedView, setSelectedView] = useState<'WEEK' | 'DAY'>('WEEK');
   const [showModal, setShowModal] = useState(false);
   const [selectedApt, setSelectedApt] = useState<AppointmentItem | null>(null);
@@ -41,7 +55,12 @@ export const AppointmentCalendarView: React.FC = () => {
   const [editTime, setEditTime] = useState('');
   const [editService, setEditService] = useState('');
 
-  const hours = ['08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'];
+  // Hours covering opening hours (08:30 - 17:30) including lunch break (12:30 - 14:00)
+  const hours = [
+    '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00',
+    '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'
+  ];
+
   const weekDays = [
     { name: 'Lundi', date: '2026-11-02' },
     { name: 'Mardi (Aujourd’hui)', date: '2026-11-03' },
@@ -54,17 +73,18 @@ export const AppointmentCalendarView: React.FC = () => {
     e.preventDefault();
     setCollisionWarning(null);
 
-    // Collision detection check (Anti double booking)
-    const conflict = appointments.find(a => 
-      a.date === aptDate && 
-      a.timeStart === aptTime && 
-      a.status !== 'CANCELLED'
-    );
-
-    if (conflict) {
-      setCollisionWarning(`Collision détectée : Le créneau de ${aptTime} le ${aptDate} est déjà réservé par ${conflict.patientName}.`);
+    // Collision & Availability check using store rules (lunch break, holidays, double booking)
+    const availabilityCheck = isSlotAvailable(aptDate, aptTime);
+    if (!availabilityCheck.available) {
+      setCollisionWarning(availabilityCheck.reason || 'Ce créneau n’est pas disponible.');
       return;
     }
+
+    const duration = availabilitySettings.consultationDuration || 30;
+    const [h, m] = aptTime.split(':').map(Number);
+    const endMinutes = h * 60 + m + duration;
+    const endH = Math.floor(endMinutes / 60).toString().padStart(2, '0');
+    const endM = (endMinutes % 60).toString().padStart(2, '0');
 
     const newApt: AppointmentItem = {
       id: `apt-${Date.now()}`,
@@ -75,8 +95,8 @@ export const AppointmentCalendarView: React.FC = () => {
       serviceName: aptService,
       date: aptDate,
       timeStart: aptTime,
-      timeEnd: `${parseInt(aptTime.split(':')[0]) + (aptTime.endsWith('30') ? 1 : 0)}:${aptTime.endsWith('30') ? '00' : '30'}`,
-      durationMinutes: 30,
+      timeEnd: `${endH}:${endM}`,
+      durationMinutes: duration,
       status: 'SCHEDULED',
       reminderSent24h: false,
       googleCalendarSynced: true,
@@ -86,7 +106,7 @@ export const AppointmentCalendarView: React.FC = () => {
     addAppointment(newApt);
     showToast({
       title: 'Rendez-vous créé avec succès !',
-      message: `Créneau de ${aptTime} enregistré et synchronisé avec Google Calendar.`,
+      message: `Créneau de ${aptTime} enregistré (${duration} min) et synchronisé avec Google Calendar.`,
       type: 'success'
     });
     setShowModal(false);
@@ -106,6 +126,19 @@ export const AppointmentCalendarView: React.FC = () => {
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedApt) return;
+
+    // Check if new time slot is during lunch break or already taken
+    if (editTime !== selectedApt.timeStart || editDate !== selectedApt.date) {
+      const check = isSlotAvailable(editDate, editTime);
+      if (!check.available && !check.reason?.includes(selectedApt.patientName)) {
+        showToast({
+          title: 'Modification impossible',
+          message: check.reason || 'Ce créneau est bloqué.',
+          type: 'danger'
+        });
+        return;
+      }
+    }
 
     updateAppointment(selectedApt.id, {
       date: editDate,
@@ -186,17 +219,30 @@ export const AppointmentCalendarView: React.FC = () => {
       </div>
 
       {/* Synchronized status bar */}
-      <div className="p-3.5 bg-white rounded-xl border border-[#E5EAF2] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-2 text-slate-700 font-medium">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-          <span className="truncate">Google Calendar Connecté : <b>{sector === 'MEDICAL' ? 'dr.bensalem@cabinet-ai.tn' : 'me.trabelsi@avocats-tunis.tn'}</b></span>
+      <div className="p-3.5 bg-white rounded-xl border border-[#E5EAF2] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-4 text-slate-700 font-medium">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+            <span className="truncate">Google Calendar : <b>{sector === 'MEDICAL' ? 'dr.bensalem@cabinet-ai.tn' : 'me.trabelsi@avocats-tunis.tn'}</b></span>
+          </div>
+          
+          <div className="hidden sm:flex items-center gap-1.5 text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200/80">
+            <Coffee className="w-3.5 h-3.5 text-amber-600" />
+            <span className="font-semibold text-[11px]">Pause Déjeuner : 12:30 - 14:00</span>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-1.5 text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200/80">
+            <Bot className="w-3.5 h-3.5 text-blue-600" />
+            <span className="font-semibold text-[11px]">IA Synchronisée ({availabilitySettings.consultationDuration} min)</span>
+          </div>
         </div>
-        <span className="text-[11px] text-slate-400 font-mono shrink-0">Dernière synchronisation : Il y a 2 min</span>
+
+        <span className="text-[11px] text-slate-400 font-mono shrink-0">Dernière synchronisation : Il y a 1 min</span>
       </div>
 
       {/* Calendar Grid (Week View) */}
       <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs overflow-x-auto">
-        <div className="min-w-[700px]">
+        <div className="min-w-[750px]">
           {/* Days Header */}
           <div className="grid grid-cols-6 border-b border-[#E5EAF2] bg-[#F7F9FC] text-center text-xs font-bold text-slate-700">
             <div className="p-3 border-r border-[#E5EAF2] text-slate-400">Créneau</div>
@@ -218,6 +264,11 @@ export const AppointmentCalendarView: React.FC = () => {
 
                 {weekDays.map(d => {
                   const apt = appointments.find(a => a.date === d.date && a.timeStart === slot && a.status !== 'CANCELLED');
+                  const slotStatus = isSlotAvailable(d.date, slot);
+
+                  // Is lunch break slot?
+                  const isLunchBreak = slotStatus.reason?.includes('Pause Déjeuner') || (slot >= '12:30' && slot < '14:00');
+
                   return (
                     <div 
                       key={`${d.date}-${slot}`} 
@@ -236,6 +287,15 @@ export const AppointmentCalendarView: React.FC = () => {
                             <span>{apt.timeStart} - {apt.timeEnd}</span>
                             <span className="text-emerald-700 font-bold">Google Synced</span>
                           </div>
+                        </div>
+                      ) : isLunchBreak ? (
+                        <div className="h-full p-2 rounded-lg bg-amber-50/60 border border-amber-200/50 text-amber-800 flex items-center justify-center gap-1.5 shadow-2xs select-none">
+                          <Coffee className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span className="text-[10px] font-semibold text-amber-900">Pause Déjeuner</span>
+                        </div>
+                      ) : !slotStatus.available ? (
+                        <div className="h-full p-2 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400 flex items-center justify-center text-[10px] italic">
+                          Indisponible
                         </div>
                       ) : (
                         <button
@@ -295,7 +355,7 @@ export const AppointmentCalendarView: React.FC = () => {
                     onChange={e => setEditTime(e.target.value)}
                     className="w-full p-2 border border-[#E8EDF4] rounded-xl text-xs bg-[#F7F9FC]"
                   >
-                    {hours.map(h => (
+                    {hours.filter(h => !(h >= '12:30' && h < '14:00')).map(h => (
                       <option key={h} value={h}>{h}</option>
                     ))}
                   </select>
@@ -469,7 +529,7 @@ export const AppointmentCalendarView: React.FC = () => {
                     onChange={e => setAptTime(e.target.value)}
                     className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    {hours.map(h => (
+                    {hours.filter(h => !(h >= '12:30' && h < '14:00')).map(h => (
                       <option key={h} value={h}>{h}</option>
                     ))}
                   </select>
@@ -488,7 +548,9 @@ export const AppointmentCalendarView: React.FC = () => {
               </div>
 
               <div className="pt-3 border-t flex items-center justify-between">
-                <span className="text-[11px] text-slate-400">Rappel WhatsApp 24h activé</span>
+                <span className="text-[11px] text-slate-400">
+                  Durée automatique : {availabilitySettings.consultationDuration} min
+                </span>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs transition-colors"

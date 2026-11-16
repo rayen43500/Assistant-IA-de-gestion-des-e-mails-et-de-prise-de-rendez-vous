@@ -28,7 +28,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
   onClose,
   preselectedDoctor
 }) => {
-  const { addAppointment, showToast } = useAppStore();
+  const { addAppointment, availabilitySettings, isSlotAvailable, showToast } = useAppStore();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(preselectedDoctor ? 2 : 1);
   const [selectedDoctor, setSelectedDoctor] = useState(preselectedDoctor || {
@@ -58,28 +58,38 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
     { label: 'Lun 9 Nov', date: '2026-11-09', availableCount: 7 }
   ];
 
-  // Visual states:
-  // - Available: Green (available)
-  // - Reserved: Light gray (reserved)
-  // - Selected: Blue (selected)
-  // - Unavailable: Light red (unavailable)
-  const timeSlots = [
-    { time: '08:30', state: 'available' },
-    { time: '09:00', state: 'reserved' },
-    { time: '09:30', state: 'reserved' },
-    { time: '10:00', state: 'available' },
-    { time: '10:30', state: 'available' },
-    { time: '11:00', state: 'unavailable' },
-    { time: '11:30', state: 'available' },
-    { time: '14:00', state: 'reserved' },
-    { time: '14:30', state: 'available' },
-    { time: '15:00', state: 'available' },
-    { time: '15:30', state: 'unavailable' },
-    { time: '16:00', state: 'available' }
+  // Dynamically compute time slots respecting availability (lunch break 12:30-14:00, existing bookings)
+  const baseSlotTimes = [
+    '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+    '12:30', '13:00', '13:30',
+    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
   ];
+
+  const timeSlots = baseSlotTimes.map(time => {
+    if (selectedSlot === time) {
+      return { time, state: 'selected' as const, label: 'Sélectionné' };
+    }
+    const check = isSlotAvailable(selectedDate, time);
+    if (!check.available) {
+      if (check.reason?.includes('Pause Déjeuner')) {
+        return { time, state: 'unavailable' as const, label: 'Pause' };
+      }
+      if (check.reason?.includes('déjà réservé')) {
+        return { time, state: 'reserved' as const, label: 'Réservé' };
+      }
+      return { time, state: 'unavailable' as const, label: 'Fermé' };
+    }
+    return { time, state: 'available' as const, label: 'Libre' };
+  });
 
   const handleConfirmBooking = () => {
     if (!selectedSlot) return;
+
+    const duration = availabilitySettings.consultationDuration || 30;
+    const [h, m] = selectedSlot.split(':').map(Number);
+    const endMinutes = h * 60 + m + duration;
+    const endH = Math.floor(endMinutes / 60).toString().padStart(2, '0');
+    const endM = (endMinutes % 60).toString().padStart(2, '0');
 
     addAppointment({
       id: `apt-${Date.now()}`,
@@ -90,8 +100,8 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
       serviceName: reason,
       date: selectedDate,
       timeStart: selectedSlot,
-      timeEnd: `${parseInt(selectedSlot.split(':')[0]) + (selectedSlot.endsWith('30') ? 1 : 0)}:${selectedSlot.endsWith('30') ? '00' : '30'}`,
-      durationMinutes: 30,
+      timeEnd: `${endH}:${endM}`,
+      durationMinutes: duration,
       status: 'CONFIRMED',
       reminderSent24h: true,
       googleCalendarSynced: true,
@@ -101,7 +111,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
     setStep(5); // Confirmation screen
     showToast({
       title: 'Rendez-vous réservé avec succès !',
-      message: `Créneau de ${selectedSlot} le ${selectedDate} confirmé avec le ${selectedDoctor.name}.`,
+      message: `Créneau de ${selectedSlot} (${duration} min) confirmé avec le ${selectedDoctor.name}.`,
       type: 'success'
     });
   };
