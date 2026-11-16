@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PublicLandingPage } from './components/landing/PublicLandingPage';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { AppSidebar } from './components/navigation/AppSidebar';
@@ -44,7 +44,14 @@ export default function App() {
     }
   ]);
 
-  const { addEmail } = useAppStore();
+  const { addEmail, loadEmails, loadAppointments, checkConnection } = useAppStore();
+
+  useEffect(() => {
+    // Connexion automatique et chargement dynamique depuis le backend
+    checkConnection();
+    loadEmails();
+    loadAppointments();
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F7F9FC] text-[#172033] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">

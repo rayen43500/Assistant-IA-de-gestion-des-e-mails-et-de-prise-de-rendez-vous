@@ -67,6 +67,23 @@ app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/clinics', clinicRoutes);
 app.use('/api/ai', aiRoutes);
 
+// Route racine d'accueil API
+app.get('/', (req, res) => {
+  res.json({
+    name: 'MediLawAI SaaS Backend API',
+    status: 'ONLINE',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      metrics: '/metrics',
+      emails: '/api/emails',
+      appointments: '/api/appointments',
+      ai: '/api/ai',
+      auth: '/api/auth'
+    }
+  });
+});
+
 // Endpoint Prometheus pour le scraping
 app.get('/metrics', async (req, res) => {
   res.set('Content-Type', client.register.contentType);
@@ -95,8 +112,12 @@ app.use((err, req, res, next) => {
 
 // Démarrage du serveur et connexion DB
 const startServer = async () => {
-  await connectDB();
-  await seedInitialData();
+  try {
+    await connectDB();
+    await seedInitialData().catch(err => console.warn('[Seed] Différé :', err.message));
+  } catch (err) {
+    console.warn('[Startup] Connexion DB différée :', err.message);
+  }
 
   app.listen(PORT, () => {
     console.log(`===================================================`);

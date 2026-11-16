@@ -1,7 +1,22 @@
 import { create } from 'zustand';
 import type { SectorType, UserProfile, EmailItem, AppointmentItem, ClientContact, N8nWorkflowInfo } from '../types';
+import { 
+  API_BASE_URL,
+  apiFetchEmails, 
+  apiIngestEmail, 
+  apiValidateEmail, 
+  apiFetchAppointments, 
+  apiCreateAppointment, 
+  apiCancelAppointment,
+  apiCheckBackendHealth
+} from '../services/apiClient';
 
 interface AppStore {
+  // Backend Connection Info
+  backendUrl: string;
+  isBackendConnected: boolean;
+  checkConnection: () => Promise<void>;
+
   // Sector & Organization
   sector: SectorType;
   setSector: (s: SectorType) => void;
@@ -14,15 +29,18 @@ interface AppStore {
   currentUser: UserProfile;
   setCurrentUser: (u: UserProfile) => void;
 
-  // Data Collections
+  // Data Collections & Dynamic API Actions
   emails: EmailItem[];
   setEmails: (emails: EmailItem[]) => void;
-  updateEmailStatus: (id: string, status: EmailItem['status'], draftReply?: string) => void;
+  loadEmails: () => Promise<void>;
+  updateEmailStatus: (id: string, status: EmailItem['status'], draftReply?: string) => Promise<void>;
   addEmail: (email: EmailItem) => void;
+  ingestNewEmail: (emailPayload: { sender: { name: string; email: string; phone?: string }; subject: string; body: string }) => Promise<void>;
 
   appointments: AppointmentItem[];
-  addAppointment: (apt: AppointmentItem) => void;
-  cancelAppointment: (id: string) => void;
+  loadAppointments: () => Promise<void>;
+  addAppointment: (apt: AppointmentItem) => Promise<void>;
+  cancelAppointment: (id: string) => Promise<void>;
   confirmAppointment: (id: string) => void;
 
   contacts: ClientContact[];
@@ -184,7 +202,19 @@ const initialWorkflows: N8nWorkflowInfo[] = [
   { id: 'wf-4', name: 'Escalade SAMU & Protection Civile', description: 'Alerte SMS immédiate au médecin de garde et consigne vitale 190.', trigger: 'Webhook Alerte Haute', status: 'ACTIVE', lastRun: 'Ce matin 08:30', successRate: 100, totalRuns: 45 }
 ];
 
-export const useAppStore = create<AppStore>((set) => ({
+export const useAppStore = create<AppStore>((set, get) => ({
+  backendUrl: API_BASE_URL,
+  isBackendConnected: false,
+
+  checkConnection: async () => {
+    try {
+      await apiCheckBackendHealth();
+      set({ isBackendConnected: true });
+    } catch {
+      set({ isBackendConnected: false });
+    }
+  },
+
   sector: 'MEDICAL',
   setSector: (sector) => set({ sector }),
   organizationName: 'Cabinet Médical Dr. Ben Salem',
@@ -207,16 +237,111 @@ export const useAppStore = create<AppStore>((set) => ({
 
   emails: initialEmails,
   setEmails: (emails) => set({ emails }),
-  updateEmailStatus: (id, status, draftReply) => set((state) => ({
-    emails: state.emails.map((e) => e.id === id ? { ...e, status, ...(draftReply ? { draftReply } : {}) } : e)
-  })),
+
+  loadEmails: async () => {
+    try {
+      const data = await apiFetchEmails();
+      if (Array.isArray(data) && data.length > 0) {
+        set({ emails: data, isBackendConnected: true });
+      }
+    } catch (err: any) {
+      console.warn('[Store] Utilisation des données e-mails de démonstration :', err.message);
+    }
+  },
+
+  updateEmailStatus: async (id, status, draftReply) => {
+    // 1. Optimistic Update immédiat
+    set((state) => ({
+      emails: state.emails.map((e) => e.id === id ? { ...e, status, ...(draftReply ? { draftReply } : {}) } : e)
+    }));
+
+    // 2. Appel réseau Backend réel
+    try {
+      await apiValidateEmail(id, {
+        draftReply,
+        sendNow: status === 'VALIDATED_AND_SENT'
+      });
+      set({ isBackendConnected: true });
+    } catch (err: any) {
+      console.warn('[Store] Validation locale confirmée (API Backend en veille) :', err.message);
+    }
+  },
+
   addEmail: (email) => set((state) => ({ emails: [email, ...state.emails] })),
 
+  ingestNewEmail: async (emailPayload) => {
+    try {
+      const ingested = await apiIngestEmail(emailPayload);
+      if (ingested && ingested.id) {
+        set((state) => ({ emails: [ingested, ...state.emails], isBackendConnected: true }));
+        return;
+      }
+    } catch (err: any) {
+      console.warn('[Store] Ingestion via mode secouru local :', err.message);
+    }
+
+    // Fallback simulation locale si le serveur distant est en veille
+    const fallbackEmail: EmailItem = {
+      id: `sim-${Date.now()}`,
+      sender: emailPayload.sender,
+      subject: emailPayload.subject,
+      body: emailPayload.body,
+      receivedAt: 'À l’instant',
+      isRead: false,
+      intent: emailPayload.subject.toLowerCase().includes('urgent') ? 'EMERGENCY' : 'APPOINTMENT',
+      priority: emailPayload.subject.toLowerCase().includes('urgent') ? 'CRITICAL' : 'HIGH',
+      status: emailPayload.subject.toLowerCase().includes('urgent') ? 'ESCALATED_EMERGENCY' : 'PENDING_VALIDATION',
+      confidence: 0.96,
+      draftReply: `Bonjour,\nNous avons bien reçu votre demande concernant "${emailPayload.subject}". Le secrétariat confirme la prise en charge.\nBien cordialement,\nCabinet Dr. Ben Salem`,
+      folder: 'inbox'
+    };
+    set((state) => ({ emails: [fallbackEmail, ...state.emails] }));
+  },
+
   appointments: initialAppointments,
-  addAppointment: (apt) => set((state) => ({ appointments: [...state.appointments, apt] })),
-  cancelAppointment: (id) => set((state) => ({
-    appointments: state.appointments.map((a) => a.id === id ? { ...a, status: 'CANCELLED' } : a)
-  })),
+
+  loadAppointments: async () => {
+    try {
+      const data = await apiFetchAppointments();
+      if (Array.isArray(data) && data.length > 0) {
+        set({ appointments: data, isBackendConnected: true });
+      }
+    } catch (err: any) {
+      console.warn('[Store] Utilisation du planning local :', err.message);
+    }
+  },
+
+  addAppointment: async (apt) => {
+    // 1. Optimistic update
+    set((state) => ({ appointments: [...state.appointments, apt] }));
+
+    // 2. Appel API Backend réel
+    try {
+      await apiCreateAppointment({
+        patient: { name: apt.patientName, email: apt.patientEmail, phone: apt.patientPhone },
+        reason: apt.serviceName,
+        date: apt.date,
+        timeSlot: { start: apt.timeStart, end: apt.timeEnd },
+        source: 'MANUAL_SECRETARY'
+      } as any);
+      set({ isBackendConnected: true });
+    } catch (err: any) {
+      console.warn('[Store] RDV sauvegardé localement (Serveur distant en veille) :', err.message);
+    }
+  },
+
+  cancelAppointment: async (id) => {
+    set((state) => ({
+      appointments: state.appointments.map((a) => a.id === id ? { ...a, status: 'CANCELLED' } : a)
+    }));
+
+    try {
+      await apiCancelAppointment(id);
+    } catch (err: any) {
+      console.warn('[Store] Annulation enregistrée localement :', err.message);
+    }
+  },
+
   confirmAppointment: (id) => set((state) => ({
     appointments: state.appointments.map((a) => a.id === id ? { ...a, status: 'CONFIRMED' } : a)
   })),

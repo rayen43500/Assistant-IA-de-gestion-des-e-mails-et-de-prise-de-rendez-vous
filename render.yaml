@@ -1,0 +1,17 @@
+services:
+  # Backend Node.js / Express API
+  - type: web
+    name: medilawai-backend
+    env: node
+    plan: free
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: AI_SERVICE_URL
+        value: http://localhost:8000
