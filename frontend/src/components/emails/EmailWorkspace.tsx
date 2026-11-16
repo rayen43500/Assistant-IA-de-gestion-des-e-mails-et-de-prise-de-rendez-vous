@@ -17,7 +17,8 @@ import {
   Calendar,
   MessageSquare,
   ShieldCheck,
-  Bot
+  Bot,
+  ArrowLeft
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 import type { EmailItem } from '../../types';
@@ -29,6 +30,7 @@ export const EmailWorkspace: React.FC = () => {
   const [filterSearch, setFilterSearch] = useState<string>('');
   const [isEditingDraft, setIsEditingDraft] = useState<boolean>(false);
   const [editedDraft, setEditedDraft] = useState<string>('');
+  const [showMobileDetail, setShowMobileDetail] = useState<boolean>(false);
 
   const selectedEmail = emails.find(e => e.id === selectedEmailId) || emails[0];
 
@@ -75,7 +77,7 @@ export const EmailWorkspace: React.FC = () => {
   return (
     <div className="h-[calc(100vh-7rem)] flex flex-col space-y-4">
       {/* Top action bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-black text-[#14213D] tracking-tight">Boîte de Réception & Tri IA</h1>
           <p className="text-xs text-slate-500">Classification NLP automatique en 5 catégories et validation Human-in-the-Loop</p>
@@ -88,10 +90,33 @@ export const EmailWorkspace: React.FC = () => {
         </div>
       </div>
 
+      {/* Mobile folder filter pills (visible on small/medium screens) */}
+      <div className="flex lg:hidden overflow-x-auto gap-1.5 pb-1 no-scrollbar shrink-0">
+        {[
+          { id: 'all', label: 'Tous', count: emails.length },
+          { id: 'pending', label: 'À Valider', count: emails.filter(e => e.status === 'PENDING_VALIDATION').length },
+          { id: 'urgent', label: 'Urgences', count: emails.filter(e => e.intent === 'EMERGENCY').length },
+          { id: 'appointments', label: 'RDV', count: emails.filter(e => e.intent === 'APPOINTMENT').length },
+          { id: 'pricing', label: 'Tarifs', count: emails.filter(e => e.intent === 'PRICING').length },
+        ].map(folder => (
+          <button
+            key={folder.id}
+            onClick={() => { setActiveFolder(folder.id); setShowMobileDetail(false); }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              activeFolder === folder.id
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white border border-[#E5EAF2] text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {folder.label} ({folder.count})
+          </button>
+        ))}
+      </div>
+
       {/* 3-Panel Email Layout */}
       <div className="flex-1 bg-white rounded-2xl border border-[#E5EAF2] shadow-xs flex overflow-hidden">
-        {/* Panel 1: Folders / Filters (Left) */}
-        <div className="w-56 border-r border-[#E5EAF2] bg-[#F7F9FC] p-3 flex flex-col justify-between shrink-0">
+        {/* Panel 1: Folders / Filters (Left - Hidden on mobile/tablet) */}
+        <div className="hidden lg:flex w-56 border-r border-[#E5EAF2] bg-[#F7F9FC] p-3 flex-col justify-between shrink-0">
           <div className="space-y-1">
             <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Dossiers & Filtres IA
@@ -143,8 +168,8 @@ export const EmailWorkspace: React.FC = () => {
           </div>
         </div>
 
-        {/* Panel 2: Email List (Center) */}
-        <div className="w-80 border-r border-[#E5EAF2] flex flex-col shrink-0">
+        {/* Panel 2: Email List (Center - Full width on mobile when no detail is open) */}
+        <div className={`${showMobileDetail ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-[#E5EAF2] flex-col shrink-0`}>
           <div className="p-3 border-b border-[#E5EAF2]">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -165,7 +190,12 @@ export const EmailWorkspace: React.FC = () => {
               return (
                 <div
                   key={em.id}
-                  onClick={() => { setSelectedEmailId(em.id); setIsEditingDraft(false); setEditedDraft(''); }}
+                  onClick={() => { 
+                    setSelectedEmailId(em.id); 
+                    setIsEditingDraft(false); 
+                    setEditedDraft(''); 
+                    setShowMobileDetail(true);
+                  }}
                   className={`p-3.5 cursor-pointer transition-all ${
                     isSelected ? 'bg-blue-50/70 border-l-4 border-blue-600' : 'hover:bg-slate-50'
                   }`}
@@ -205,9 +235,18 @@ export const EmailWorkspace: React.FC = () => {
           </div>
         </div>
 
-        {/* Panel 3: Email Preview & AI Response Generator (Right) */}
+        {/* Panel 3: Email Preview & AI Response Generator (Right - Full width on mobile when detail is open) */}
         {selectedEmail ? (
-          <div className="flex-1 flex flex-col overflow-y-auto bg-white p-6 space-y-6">
+          <div className={`${showMobileDetail ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-y-auto bg-white p-4 sm:p-6 space-y-6`}>
+            {/* Mobile Back Button to return to list */}
+            <button
+              onClick={() => setShowMobileDetail(false)}
+              className="md:hidden flex items-center gap-1.5 text-xs font-bold text-blue-600 p-2 rounded-xl bg-blue-50 hover:bg-blue-100 w-fit transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Retour à la boîte de réception</span>
+            </button>
+
             {/* Header info */}
             <div className="border-b border-[#E5EAF2] pb-4 space-y-3">
               <div className="flex items-start justify-between gap-4">

@@ -57,7 +57,8 @@ export const ContactsDirectoryView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Table List */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-[#E5EAF2] shadow-xs overflow-hidden">
-          <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[550px]">
             <thead className="bg-[#F7F9FC] border-b border-[#E5EAF2] text-slate-500 font-semibold">
               <tr>
                 <th className="p-3.5">Identifiant / Nom</th>
@@ -99,6 +100,7 @@ export const ContactsDirectoryView: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Contact Profile Detail */}

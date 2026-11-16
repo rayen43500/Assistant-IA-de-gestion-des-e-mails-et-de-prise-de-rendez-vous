@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PublicLandingPage } from './components/landing/PublicLandingPage';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
+import { AuthModal } from './components/auth/AuthModal';
 import { AppSidebar } from './components/navigation/AppSidebar';
 import { AppTopHeader } from './components/navigation/AppTopHeader';
 import { EnterpriseDashboard } from './components/dashboard/EnterpriseDashboard';
@@ -19,6 +20,9 @@ import { useAppStore } from './stores/useAppStore';
 export default function App() {
   const [inAppMode, setInAppMode] = useState<boolean>(true); // Default to SaaS app directly, can toggle to landing
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+  const [authModalMode, setAuthModalMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [documents, setDocuments] = useState([
     {
@@ -58,6 +62,17 @@ export default function App() {
       {/* Toast Notification Container */}
       <ToastNotification />
 
+      {/* Espace de Connexion & Inscription Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        initialMode={authModalMode}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          setShowAuthModal(false);
+          setInAppMode(true);
+        }}
+      />
+
       {/* Onboarding Wizard Modal */}
       {showOnboarding && (
         <OnboardingWizard
@@ -71,26 +86,37 @@ export default function App() {
         <PublicLandingPage
           onEnterApp={() => setInAppMode(true)}
           onOpenOnboarding={() => setShowOnboarding(true)}
+          onOpenAuth={(mode) => {
+            setAuthModalMode(mode);
+            setShowAuthModal(true);
+          }}
         />
       ) : (
         /* Authenticated SaaS Professional Workspace */
         <div className="flex h-screen overflow-hidden">
-          {/* Main App Sidebar */}
+          {/* Main App Sidebar with Mobile Support */}
           <AppSidebar
             currentTab={currentTab}
             onSelectTab={setCurrentTab}
             onBackToLanding={() => setInAppMode(false)}
+            isOpenMobile={mobileMenuOpen}
+            onCloseMobile={() => setMobileMenuOpen(false)}
           />
 
           {/* Center Work Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {/* Top Navigation Bar */}
+            {/* Top Navigation Bar with Hamburger */}
             <AppTopHeader
               onOpenQuickAppointment={() => setCurrentTab('appointments')}
+              onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+              onOpenAuthModal={() => {
+                setAuthModalMode('LOGIN');
+                setShowAuthModal(true);
+              }}
             />
 
             {/* Scrollable Main Workspace Content */}
-            <main className="flex-1 overflow-y-auto p-6">
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6">
               {currentTab === 'dashboard' && (
                 <EnterpriseDashboard
                   onNavigateToEmails={() => setCurrentTab('emails')}

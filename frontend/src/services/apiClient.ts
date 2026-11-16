@@ -22,6 +22,42 @@ apiClient.interceptors.request.use((config) => {
 });
 
 // ========================================================
+// 0. AUTHENTIFICATION & ESPACE DE CONNEXION
+// ========================================================
+
+export const apiLogin = async (credentials: { email: string; password: string }) => {
+  const response = await apiClient.post('/api/auth/login', credentials);
+  if (response.data && response.data.token) {
+    localStorage.setItem('medilaw_jwt_token', response.data.token);
+  }
+  return response.data;
+};
+
+export const apiRegister = async (userData: {
+  name: string;
+  email: string;
+  password: string;
+  role?: string;
+  clinicName?: string;
+  clinicType?: 'MEDICAL' | 'LEGAL';
+}) => {
+  const response = await apiClient.post('/api/auth/register', userData);
+  if (response.data && response.data.token) {
+    localStorage.setItem('medilaw_jwt_token', response.data.token);
+  }
+  return response.data;
+};
+
+export const apiGetCurrentUser = async () => {
+  const response = await apiClient.get('/api/auth/me');
+  return response.data;
+};
+
+export const apiLogout = () => {
+  localStorage.removeItem('medilaw_jwt_token');
+};
+
+// ========================================================
 // 1. ENDPOINTS EMAILS
 // ========================================================
 

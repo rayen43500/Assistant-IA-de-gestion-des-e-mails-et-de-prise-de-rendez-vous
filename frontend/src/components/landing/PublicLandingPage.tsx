@@ -22,9 +22,10 @@ import {
 interface PublicLandingPageProps {
   onEnterApp: () => void;
   onOpenOnboarding: () => void;
+  onOpenAuth?: (mode: 'LOGIN' | 'REGISTER') => void;
 }
 
-export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ onEnterApp, onOpenOnboarding }) => {
+export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ onEnterApp, onOpenOnboarding, onOpenAuth }) => {
   const [activeTab, setActiveTab] = useState<'ALL' | 'MEDICAL' | 'LEGAL'>('ALL');
   const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'ANNUAL'>('ANNUAL');
 
@@ -53,16 +54,16 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ onEnterApp
 
           <div className="flex items-center gap-3">
             <button
-              onClick={onEnterApp}
+              onClick={() => onOpenAuth ? onOpenAuth('LOGIN') : onEnterApp()}
               className="text-xs font-bold text-slate-700 hover:text-blue-600 px-3.5 py-2 transition-colors"
             >
               Connexion Espace Pro
             </button>
             <button
-              onClick={onOpenOnboarding}
+              onClick={() => onOpenAuth ? onOpenAuth('REGISTER') : onOpenOnboarding()}
               className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5"
             >
-              <span>Essai Gratuit 14 Jours</span>
+              <span>Créer Mon Cabinet</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

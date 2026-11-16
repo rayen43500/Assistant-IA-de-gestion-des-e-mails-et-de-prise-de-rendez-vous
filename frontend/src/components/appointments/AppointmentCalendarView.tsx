@@ -120,12 +120,12 @@ export const AppointmentCalendarView: React.FC = () => {
       </div>
 
       {/* Synchronized status bar */}
-      <div className="p-3.5 bg-white rounded-xl border border-[#E5EAF2] shadow-xs flex items-center justify-between text-xs">
+      <div className="p-3.5 bg-white rounded-xl border border-[#E5EAF2] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-2 text-slate-700 font-medium">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Google Calendar Connecté : <b>{sector === 'MEDICAL' ? 'dr.bensalem@cabinet-ai.tn' : 'me.trabelsi@avocats-tunis.tn'}</b></span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+          <span className="truncate">Google Calendar Connecté : <b>{sector === 'MEDICAL' ? 'dr.bensalem@cabinet-ai.tn' : 'me.trabelsi@avocats-tunis.tn'}</b></span>
         </div>
-        <span className="text-[11px] text-slate-400 font-mono">Dernière synchronisation : Il y a 2 min</span>
+        <span className="text-[11px] text-slate-400 font-mono shrink-0">Dernière synchronisation : Il y a 2 min</span>
       </div>
 
       {/* Calendar Grid (Week View inspired by Screenshot 2/3) */}

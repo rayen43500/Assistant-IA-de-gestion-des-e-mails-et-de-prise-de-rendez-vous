@@ -161,29 +161,48 @@ export const AiAssistantWorkspace: React.FC = () => {
           )}
         </div>
 
+        {/* Mobile quick prompts pills */}
+        <div className="flex xl:hidden overflow-x-auto gap-1.5 px-4 py-2 border-t border-[#E5EAF2] bg-[#F7F9FC] no-scrollbar shrink-0">
+          {[
+            "Tarifs & CNAM ?",
+            "Créneaux libres demain ?",
+            "Protocole urgence 190 ?",
+            "Résume les e-mails en attente"
+          ].map((prompt, pIdx) => (
+            <button
+              key={pIdx}
+              type="button"
+              onClick={() => setInputValue(prompt)}
+              className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200 text-[10px] font-bold whitespace-nowrap shadow-2xs transition-all"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+
         {/* Input Bar */}
-        <form onSubmit={handleSend} className="p-4 border-t border-[#E5EAF2] bg-white flex items-center gap-3">
+        <form onSubmit={handleSend} className="p-3 sm:p-4 border-t border-[#E5EAF2] bg-white flex items-center gap-2 sm:gap-3">
           <input
             type="text"
             placeholder={sector === 'MEDICAL' 
-              ? "Ex: Quels sont nos tarifs CNAM pour un ECG ? Quels créneaux sont libres demain ?" 
-              : "Ex: Quels sont nos honoraires de consultation ? Rédige un modèle pour vendredi..."}
+              ? "Ex: Tarifs CNAM pour un ECG ? Créneaux libres demain ?" 
+              : "Ex: Honoraires de consultation ? Rédige un modèle pour vendredi..."}
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
-            className="flex-1 px-4 py-2.5 text-xs bg-[#F7F9FC] border border-[#E5EAF2] rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
+            className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs bg-[#F7F9FC] border border-[#E5EAF2] rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
           />
           <button
             type="submit"
             disabled={!inputValue.trim()}
-            className="p-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white shadow-sm transition-all"
+            className="p-2 sm:p-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white shadow-sm transition-all shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>
         </form>
       </div>
 
-      {/* Suggested Prompts sidebar */}
-      <div className="w-72 bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-5 space-y-4 shrink-0 flex flex-col justify-between">
+      {/* Suggested Prompts sidebar (Hidden on mobile/tablet) */}
+      <div className="hidden xl:flex w-72 bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-5 space-y-4 shrink-0 flex-col justify-between">
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
             <Lightbulb className="w-4 h-4 text-amber-500" />
