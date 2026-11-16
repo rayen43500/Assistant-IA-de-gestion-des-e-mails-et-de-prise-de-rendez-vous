@@ -98,6 +98,45 @@ export const AdminCabinetsTab: React.FC = () => {
     return true;
   });
 
+  const [editingCabinet, setEditingCabinet] = useState<any>(null);
+
+  const handleUpdateCabinet = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCabinet) return;
+
+    setCabinets(prev => prev.map(c => c.id === editingCabinet.id ? editingCabinet : c));
+    showToast({
+      title: 'Cabinet mis à jour !',
+      message: `${editingCabinet.name} a été modifié avec succès.`,
+      type: 'success'
+    });
+    setEditingCabinet(null);
+  };
+
+  const handleDeleteCabinet = (id: string, name: string) => {
+    setCabinets(prev => prev.filter(c => c.id !== id));
+    showToast({
+      title: 'Cabinet supprimé',
+      message: `${name} a été supprimé de la plateforme SaaS.`,
+      type: 'warning'
+    });
+  };
+
+  const handleToggleStatus = (id: string) => {
+    setCabinets(prev => prev.map(c => {
+      if (c.id === id) {
+        const nextStatus = c.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+        showToast({
+          title: `Statut modifié : ${nextStatus}`,
+          message: `${c.name} est désormais ${nextStatus === 'ACTIVE' ? 'actif' : 'suspendu'}.`,
+          type: nextStatus === 'ACTIVE' ? 'success' : 'warning'
+        });
+        return { ...c, status: nextStatus };
+      }
+      return c;
+    }));
+  };
+
   const handleCreateCabinet = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCabinetName || !newCabinetEmail) return;
@@ -242,9 +281,31 @@ export const AdminCabinetsTab: React.FC = () => {
                   </td>
 
                   <td className="p-4 text-right">
-                    <button className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => setEditingCabinet({ ...cab })}
+                        title="Modifier le cabinet"
+                        className="p-1.5 hover:bg-blue-50 text-slate-500 hover:text-[#2563EB] rounded-lg transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleToggleStatus(cab.id)}
+                        title={cab.status === 'ACTIVE' ? 'Suspendre' : 'Activer'}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors ${
+                          cab.status === 'ACTIVE' ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                        }`}
+                      >
+                        {cab.status === 'ACTIVE' ? 'Suspendre' : 'Activer'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCabinet(cab.id, cab.name)}
+                        title="Supprimer définitivement"
+                        className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -342,6 +403,105 @@ export const AdminCabinetsTab: React.FC = () => {
                   className="px-4 py-2 bg-[#2563EB] text-white font-bold rounded-xl shadow-xs hover:bg-blue-700"
                 >
                   Créer le Tenant
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Cabinet Modal */}
+      {editingCabinet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-[#E8EDF4] max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E8EDF4] pb-3">
+              <h3 className="font-black text-sm text-[#14213D] flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-[#2563EB]" />
+                <span>Modifier le Cabinet : {editingCabinet.name}</span>
+              </h3>
+              <button onClick={() => setEditingCabinet(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateCabinet} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nom du Cabinet</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCabinet.name}
+                  onChange={e => setEditingCabinet({ ...editingCabinet, name: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Ville</label>
+                  <input
+                    type="text"
+                    value={editingCabinet.city}
+                    onChange={e => setEditingCabinet({ ...editingCabinet, city: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl focus:outline-none focus:border-[#2563EB]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Spécialité</label>
+                  <input
+                    type="text"
+                    value={editingCabinet.specialty}
+                    onChange={e => setEditingCabinet({ ...editingCabinet, specialty: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl focus:outline-none focus:border-[#2563EB]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Formule SaaS</label>
+                  <select
+                    value={editingCabinet.plan}
+                    onChange={e => setEditingCabinet({ 
+                      ...editingCabinet, 
+                      plan: e.target.value,
+                      mrr: e.target.value === 'ENTERPRISE' ? 1200 : e.target.value === 'PROFESSIONNEL' ? 500 : 250
+                    })}
+                    className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl focus:outline-none focus:border-[#2563EB]"
+                  >
+                    <option value="STARTER">Starter (250 DT)</option>
+                    <option value="PROFESSIONNEL">Professionnel (500 DT)</option>
+                    <option value="ENTERPRISE">Enterprise (1,200 DT)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Statut du Tenant</label>
+                  <select
+                    value={editingCabinet.status}
+                    onChange={e => setEditingCabinet({ ...editingCabinet, status: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl focus:outline-none focus:border-[#2563EB]"
+                  >
+                    <option value="ACTIVE">Actif</option>
+                    <option value="SUSPENDED">Suspendu</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingCabinet(null)}
+                  className="px-4 py-2 border border-[#E8EDF4] rounded-xl text-slate-600 font-bold hover:bg-slate-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#2563EB] text-white font-bold rounded-xl shadow-xs hover:bg-blue-700"
+                >
+                  Enregistrer les Modifications
                 </button>
               </div>
             </form>

@@ -8,13 +8,19 @@ import {
   XCircle, 
   Phone, 
   FileText,
-  X
+  X,
+  Edit2
 } from 'lucide-react';
 import { useAppStore } from '../../../stores/useAppStore';
 
 export const PatientMyAppointmentsTab: React.FC = () => {
-  const { appointments, cancelAppointment, showToast } = useAppStore();
+  const { appointments, cancelAppointment, updateAppointment, showToast } = useAppStore();
   const [selectedAptDetails, setSelectedAptDetails] = useState<any>(null);
+  const [reschedulingApt, setReschedulingApt] = useState<any>(null);
+  const [newDate, setNewDate] = useState('2026-11-04');
+  const [newTime, setNewTime] = useState('11:00');
+
+  const hours = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:30', '15:00', '15:30', '16:00'];
 
   const handleCancelClick = (id: string, docName: string) => {
     cancelAppointment(id);
@@ -23,6 +29,25 @@ export const PatientMyAppointmentsTab: React.FC = () => {
       message: `Votre rendez-vous avec le ${docName} a été annulé et le créneau libéré.`,
       type: 'info'
     });
+    setSelectedAptDetails(null);
+  };
+
+  const handleRescheduleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reschedulingApt) return;
+
+    updateAppointment(reschedulingApt.id, {
+      date: newDate,
+      timeStart: newTime
+    });
+
+    showToast({
+      title: 'Rendez-vous déplacé !',
+      message: `Votre rendez-vous a été reprogrammé au ${newDate} à ${newTime}. Un SMS de confirmation vous a été envoyé.`,
+      type: 'success'
+    });
+
+    setReschedulingApt(null);
     setSelectedAptDetails(null);
   };
 
@@ -83,22 +108,98 @@ export const PatientMyAppointmentsTab: React.FC = () => {
                   onClick={() => setSelectedAptDetails(apt)}
                   className="px-3.5 py-2 bg-[#F7F9FC] hover:bg-slate-100 border border-[#E8EDF4] text-slate-700 rounded-xl text-xs font-bold transition-colors"
                 >
-                  Voir Détails
+                  Détails
                 </button>
 
                 {!isCancelled && (
-                  <button
-                    onClick={() => handleCancelClick(apt.id, apt.practitionerName)}
-                    className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors"
-                  >
-                    Annuler
-                  </button>
+                  <>
+                    <button
+                      onClick={() => {
+                        setReschedulingApt(apt);
+                        setNewDate(apt.date);
+                        setNewTime(apt.timeStart);
+                      }}
+                      className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-[#2563EB] border border-blue-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Déplacer
+                    </button>
+                    <button
+                      onClick={() => handleCancelClick(apt.id, apt.practitionerName)}
+                      className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors"
+                    >
+                      Annuler
+                    </button>
+                  </>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Reschedule Modal */}
+      {reschedulingApt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl border border-[#E8EDF4] max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E8EDF4] pb-3">
+              <h3 className="font-black text-sm text-[#14213D] flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-[#2563EB]" />
+                Déplacer le Rendez-vous
+              </h3>
+              <button onClick={() => setReschedulingApt(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRescheduleSubmit} className="space-y-4 text-xs">
+              <div>
+                <span className="text-slate-500">Praticien : </span>
+                <span className="font-bold text-[#14213D]">{reschedulingApt.practitionerName}</span>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nouvelle Date Souhaitée</label>
+                <input
+                  type="date"
+                  required
+                  value={newDate}
+                  onChange={e => setNewDate(e.target.value)}
+                  className="w-full p-2.5 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nouveau Créneau Disponible</label>
+                <select
+                  value={newTime}
+                  onChange={e => setNewTime(e.target.value)}
+                  className="w-full p-2.5 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                >
+                  {hours.map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setReschedulingApt(null)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-bold"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#2563EB] text-white rounded-xl font-bold hover:bg-[#1d4ed8]"
+                >
+                  Confirmer le Changement
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Appointment Detail Modal */}
       {selectedAptDetails && (

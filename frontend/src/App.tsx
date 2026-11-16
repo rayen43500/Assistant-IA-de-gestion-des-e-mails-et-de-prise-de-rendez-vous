@@ -176,7 +176,7 @@ export default function App() {
               )}
 
               {currentTab === 'notifications' && (
-                <MedicalNotificationsCenterView 
+                <MedicalNotificationsCenterView
                   onNavigateToEmails={() => setCurrentTab('emails')}
                   onNavigateToCalendar={() => setCurrentTab('appointments')}
                 />

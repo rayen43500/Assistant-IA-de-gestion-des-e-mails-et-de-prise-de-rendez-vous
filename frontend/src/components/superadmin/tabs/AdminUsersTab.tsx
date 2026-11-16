@@ -6,10 +6,14 @@ import {
   Key, 
   UserX, 
   UserCheck, 
-  MoreVertical, 
+  Plus, 
+  Edit2, 
+  Trash2, 
   Lock,
   Mail,
-  Building2
+  Building2,
+  X,
+  Power
 } from 'lucide-react';
 import { useAppStore } from '../../../stores/useAppStore';
 
@@ -17,6 +21,15 @@ export const AdminUsersTab: React.FC = () => {
   const { showToast } = useAppStore();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+
+  // Add form state
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState<'PRATICIEN' | 'SECRETAIRE' | 'ADMIN' | 'SUPER_ADMIN'>('PRATICIEN');
+  const [newCabinet, setNewCabinet] = useState('Cabinet Médical Dr. Ben Salem');
+  const [newTwoFactor, setNewTwoFactor] = useState(true);
 
   const [users, setUsers] = useState([
     { id: 'usr-1', name: 'Dr. Youssef Ben Salem', email: 'dr.bensalem@cabinet-ai.tn', role: 'PRATICIEN', cabinet: 'Cabinet Médical Dr. Ben Salem', twoFactor: true, lastLogin: 'Il y a 14 min', status: 'ACTIVE' },
@@ -27,14 +40,70 @@ export const AdminUsersTab: React.FC = () => {
     { id: 'usr-6', name: 'Amine Mansour', email: 'admin@medilaw.ai', role: 'SUPER_ADMIN', cabinet: 'MediLawAI Platform Inc.', twoFactor: true, lastLogin: 'En ligne', status: 'ACTIVE' }
   ]);
 
-  const filtered = users.filter(u => {
-    if (roleFilter !== 'ALL' && u.role !== roleFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.cabinet.toLowerCase().includes(q);
-    }
-    return true;
-  });
+  const handleAddUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName || !newEmail) return;
+
+    const created = {
+      id: `usr-${Date.now()}`,
+      name: newName,
+      email: newEmail,
+      role: newRole,
+      cabinet: newCabinet,
+      twoFactor: newTwoFactor,
+      lastLogin: 'Jamais connecté',
+      status: 'ACTIVE'
+    };
+
+    setUsers([created, ...users]);
+    setShowAddModal(false);
+    setNewName('');
+    setNewEmail('');
+
+    showToast({
+      title: 'Compte utilisateur créé !',
+      message: `${created.name} (${created.role}) a été ajouté. Un e-mail d'invitation lui a été transmis.`,
+      type: 'success'
+    });
+  };
+
+  const handleUpdateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    setUsers(prev => prev.map(u => u.id === editingUser.id ? editingUser : u));
+    showToast({
+      title: 'Utilisateur mis à jour',
+      message: `Les droits et informations de ${editingUser.name} ont été modifiés.`,
+      type: 'success'
+    });
+    setEditingUser(null);
+  };
+
+  const handleDeleteUser = (id: string, name: string) => {
+    if (!window.confirm(`Confirmez-vous la révocation du compte de ${name} ?`)) return;
+    setUsers(prev => prev.filter(u => u.id !== id));
+    showToast({
+      title: 'Utilisateur supprimé',
+      message: `Le compte de ${name} a été révoqué du système.`,
+      type: 'warning'
+    });
+  };
+
+  const handleToggleStatus = (id: string) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === id) {
+        const next = u.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+        showToast({
+          title: 'Statut du compte modifié',
+          message: `${u.name} est maintenant ${next === 'ACTIVE' ? 'Actif' : 'Suspendu'}.`,
+          type: 'info'
+        });
+        return { ...u, status: next };
+      }
+      return u;
+    }));
+  };
 
   const handleResetPassword = (email: string) => {
     showToast({
@@ -43,6 +112,15 @@ export const AdminUsersTab: React.FC = () => {
       type: 'info'
     });
   };
+
+  const filtered = users.filter(u => {
+    if (roleFilter !== 'ALL' && u.role !== roleFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.cabinet.toLowerCase().includes(q);
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-6 font-sans">
@@ -54,9 +132,18 @@ export const AdminUsersTab: React.FC = () => {
           </p>
         </div>
 
-        <span className="text-xs font-bold text-slate-600 bg-white border border-[#E8EDF4] px-3 py-1.5 rounded-xl shadow-2xs">
-          Comptes Enregistrés : <strong>{users.length}</strong>
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-600 bg-white border border-[#E8EDF4] px-3 py-1.5 rounded-xl shadow-2xs">
+            Comptes : <strong>{users.length}</strong>
+          </span>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 bg-[#2563EB] text-white px-3.5 py-1.5 rounded-xl text-xs font-bold hover:bg-[#1d4ed8] shadow-xs transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Nouvel Utilisateur
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search */}
@@ -145,19 +232,44 @@ export const AdminUsersTab: React.FC = () => {
                   </td>
 
                   <td className="p-4">
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      u.status === 'ACTIVE' ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'
+                    }`}>
                       {u.status}
                     </span>
                   </td>
 
                   <td className="p-4 text-right">
-                    <button
-                      onClick={() => handleResetPassword(u.email)}
-                      title="Réinitialiser mot de passe"
-                      className="px-2.5 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      Reset MDP
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleResetPassword(u.email)}
+                        title="Réinitialiser mot de passe"
+                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded-lg transition-colors"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setEditingUser({ ...u })}
+                        title="Modifier le compte"
+                        className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleToggleStatus(u.id)}
+                        title={u.status === 'ACTIVE' ? 'Suspendre' : 'Activer'}
+                        className="p-1.5 hover:bg-amber-50 text-slate-400 hover:text-amber-600 rounded-lg transition-colors"
+                      >
+                        <Power className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(u.id, u.name)}
+                        title="Supprimer l'utilisateur"
+                        className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -165,6 +277,206 @@ export const AdminUsersTab: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Add User Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E8EDF4] shadow-2xl w-full max-w-lg p-6 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <h2 className="text-base font-bold text-[#14213D] flex items-center gap-2">
+                <Plus className="w-5 h-5 text-[#2563EB]" />
+                Créer un Utilisateur
+              </h2>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddUser} className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Nom et Prénom</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: Dr. Sarah Mansouri"
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Rôle Système</label>
+                  <select
+                    value={newRole}
+                    onChange={e => setNewRole(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                  >
+                    <option value="PRATICIEN">Praticien (Docteur / Avocat)</option>
+                    <option value="SECRETAIRE">Secrétaire / Assistant(e)</option>
+                    <option value="ADMIN">Administrateur Cabinet</option>
+                    <option value="SUPER_ADMIN">Super Admin Plateforme</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Adresse E-mail de Connexion</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="contact@cabinet.tn"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Organisation / Cabinet Rattaché</label>
+                <input
+                  type="text"
+                  required
+                  value={newCabinet}
+                  onChange={e => setNewCabinet(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="twoFactor"
+                  checked={newTwoFactor}
+                  onChange={e => setNewTwoFactor(e.target.checked)}
+                  className="rounded text-[#2563EB] focus:ring-[#2563EB]"
+                />
+                <label htmlFor="twoFactor" className="text-xs text-slate-700 font-medium">
+                  Exiger l'authentification à double facteur (2FA TOTP)
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-xl hover:bg-[#1d4ed8]"
+                >
+                  Créer Compte
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E8EDF4] shadow-2xl w-full max-w-lg p-6 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <h2 className="text-base font-bold text-[#14213D] flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-[#2563EB]" />
+                Modifier Utilisateur : {editingUser.name}
+              </h2>
+              <button 
+                onClick={() => setEditingUser(null)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateUser} className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Nom et Prénom</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingUser.name}
+                    onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Rôle Système</label>
+                  <select
+                    value={editingUser.role}
+                    onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                  >
+                    <option value="PRATICIEN">Praticien (Docteur / Avocat)</option>
+                    <option value="SECRETAIRE">Secrétaire / Assistant(e)</option>
+                    <option value="ADMIN">Administrateur Cabinet</option>
+                    <option value="SUPER_ADMIN">Super Admin Plateforme</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Adresse E-mail</label>
+                <input
+                  type="email"
+                  required
+                  value={editingUser.email}
+                  onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Organisation / Cabinet Rattaché</label>
+                <input
+                  type="text"
+                  required
+                  value={editingUser.cabinet}
+                  onChange={e => setEditingUser({ ...editingUser, cabinet: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="editTwoFactor"
+                  checked={editingUser.twoFactor}
+                  onChange={e => setEditingUser({ ...editingUser, twoFactor: e.target.checked })}
+                  className="rounded text-[#2563EB] focus:ring-[#2563EB]"
+                />
+                <label htmlFor="editTwoFactor" className="text-xs text-slate-700 font-medium">
+                  Authentification à double facteur (2FA) activée
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-xl hover:bg-[#1d4ed8]"
+                >
+                  Enregistrer Modifications
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

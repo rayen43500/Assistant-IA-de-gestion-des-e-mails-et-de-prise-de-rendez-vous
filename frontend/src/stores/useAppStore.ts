@@ -47,10 +47,15 @@ interface AppStore {
   appointments: AppointmentItem[];
   loadAppointments: () => Promise<void>;
   addAppointment: (apt: AppointmentItem) => Promise<void>;
+  updateAppointment: (id: string, updates: Partial<AppointmentItem>) => void;
+  deleteAppointment: (id: string) => void;
   cancelAppointment: (id: string) => Promise<void>;
   confirmAppointment: (id: string) => void;
 
   contacts: ClientContact[];
+  addContact: (contact: ClientContact) => void;
+  updateContact: (id: string, updates: Partial<ClientContact>) => void;
+  deleteContact: (id: string) => void;
   workflows: N8nWorkflowInfo[];
 
   // AI Autonomy Settings
@@ -480,7 +485,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
     appointments: state.appointments.map((a) => a.id === id ? { ...a, status: 'CONFIRMED' } : a)
   })),
 
+  updateAppointment: (id, updates) => set((state) => ({
+    appointments: state.appointments.map((a) => a.id === id ? { ...a, ...updates } : a)
+  })),
+
+  deleteAppointment: (id) => set((state) => ({
+    appointments: state.appointments.filter((a) => a.id !== id)
+  })),
+
   contacts: initialContacts,
+  addContact: (contact) => set((state) => ({ contacts: [contact, ...state.contacts] })),
+  updateContact: (id, updates) => set((state) => ({
+    contacts: state.contacts.map((c) => c.id === id ? { ...c, ...updates } : c)
+  })),
+  deleteContact: (id) => set((state) => ({
+    contacts: state.contacts.filter((c) => c.id !== id)
+  })),
   workflows: initialWorkflows,
 
   aiAutonomyLevel: 'HUMAN_IN_THE_LOOP',
