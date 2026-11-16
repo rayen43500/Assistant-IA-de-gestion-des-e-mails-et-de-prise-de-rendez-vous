@@ -35,7 +35,7 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({
   const emergencyEmails = emails.filter(e => e.intent === 'EMERGENCY' && e.status !== 'VALIDATED_AND_SENT');
 
   return (
-    <header className="h-16 bg-white border-b border-[#E5EAF2] px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs z-30">
+    <header className="h-18 bg-white border-b border-[#E8EDF4] px-6 flex items-center justify-between shrink-0 font-sans z-30">
       {/* Left : Hamburger on mobile + Global Search */}
       <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-md">
         {/* Mobile menu toggle */}
