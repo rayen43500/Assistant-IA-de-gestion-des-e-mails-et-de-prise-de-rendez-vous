@@ -32,11 +32,22 @@ export const ContactsDirectoryView: React.FC = () => {
   const [newCategory, setNewCategory] = useState('Cardiologie');
   const [newNotes, setNewNotes] = useState('');
 
-  const filtered = contacts.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.email.toLowerCase().includes(search.toLowerCase()) ||
-    c.identifier.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = contacts.filter(c => {
+    // Strict Sector-specific isolation: Medical patients vs Legal clients
+    const isLegalContact = c.identifier.startsWith('JUR') || c.category.toLowerCase().includes('droit') || c.category.toLowerCase().includes('juridique');
+    if (sector === 'MEDICAL' && isLegalContact) return false;
+    if (sector === 'LEGAL' && !isLegalContact) return false;
+
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) || 
+        c.email.toLowerCase().includes(q) ||
+        c.identifier.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();

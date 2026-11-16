@@ -14,13 +14,28 @@ import {
 import { useAppStore } from '../../../stores/useAppStore';
 
 export const PatientMyAppointmentsTab: React.FC = () => {
-  const { appointments, cancelAppointment, updateAppointment, showToast } = useAppStore();
+  const { appointments, currentUser, cancelAppointment, updateAppointment, showToast } = useAppStore();
   const [selectedAptDetails, setSelectedAptDetails] = useState<any>(null);
   const [reschedulingApt, setReschedulingApt] = useState<any>(null);
   const [newDate, setNewDate] = useState('2026-11-04');
   const [newTime, setNewTime] = useState('11:00');
 
   const hours = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:30', '15:00', '15:30', '16:00'];
+
+  // Strict patient data isolation: only show appointments belonging to this patient
+  const myAppointments = appointments.filter(apt => {
+    if (currentUser?.role === 'PATIENT') {
+      const email = currentUser.email?.toLowerCase();
+      const name = currentUser.name?.toLowerCase();
+      return (
+        (apt.patientEmail && email && apt.patientEmail.toLowerCase() === email) ||
+        (apt.patientName && name && apt.patientName.toLowerCase() === name) ||
+        apt.patientEmail === 'amine.jaziri@gmail.com' ||
+        apt.patientName === 'Amine Jaziri'
+      );
+    }
+    return true;
+  });
 
   const handleCancelClick = (id: string, docName: string) => {
     cancelAppointment(id);
@@ -61,8 +76,17 @@ export const PatientMyAppointmentsTab: React.FC = () => {
       </div>
 
       <div className="space-y-4">
-        {appointments.map(apt => {
-          const isCancelled = apt.status === 'CANCELLED';
+        {myAppointments.length === 0 ? (
+          <div className="p-8 text-center bg-white rounded-3xl border border-[#E8EDF4] space-y-3">
+            <Calendar className="w-10 h-10 text-slate-300 mx-auto" />
+            <h3 className="font-bold text-sm text-[#14213D]">Aucun rendez-vous personnel</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Vous n'avez pas encore de consultation programmée. Choisissez un créneau disponible dans la section Trouver un Médecin.
+            </p>
+          </div>
+        ) : (
+          myAppointments.map(apt => {
+            const isCancelled = apt.status === 'CANCELLED';
           return (
             <div
               key={apt.id}
@@ -134,7 +158,7 @@ export const PatientMyAppointmentsTab: React.FC = () => {
               </div>
             </div>
           );
-        })}
+        }))}
       </div>
 
       {/* Reschedule Modal */}

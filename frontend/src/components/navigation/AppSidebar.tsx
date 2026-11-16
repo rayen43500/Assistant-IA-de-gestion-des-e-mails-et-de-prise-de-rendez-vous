@@ -43,8 +43,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const emergencyCount = emails.filter(e => e.intent === 'EMERGENCY' && e.status !== 'VALIDATED_AND_SENT').length;
 
   const isSecretary = currentUser.role === 'SECRETAIRE';
+  const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
 
-  // 10 items matching MEDILAWAI – MEDICAL WORKSPACE UI/UX DESIGN
+  // Navigation items scoped strictly by role (Doctor vs Secretary vs Super Admin)
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'appointments', label: 'Rendez-vous', icon: Calendar },
@@ -62,7 +63,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     { id: 'notifications', label: 'Notifications', icon: Bell, urgentBadge: emergencyCount > 0 ? emergencyCount : undefined },
     { id: 'analytics', label: 'Statistiques', icon: BarChart3, doctorOnly: true },
     { id: 'settings', label: 'Paramètres', icon: Settings },
-    { id: 'super-admin', label: 'Super Admin', icon: ShieldAlert, isAdmin: true }
+    ...(isSuperAdmin ? [{ id: 'super-admin', label: 'Super Admin', icon: ShieldAlert, isAdmin: true }] : [])
   ].filter(item => !(isSecretary && item.doctorOnly));
 
   const handleItemClick = (id: string) => {

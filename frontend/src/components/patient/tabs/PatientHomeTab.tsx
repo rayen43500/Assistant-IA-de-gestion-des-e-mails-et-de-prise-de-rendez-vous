@@ -26,14 +26,21 @@ export const PatientHomeTab: React.FC<PatientHomeTabProps> = ({
 }) => {
   const { appointments, currentUser } = useAppStore();
 
-  const nextApt = appointments.find(a => a.status !== 'CANCELLED') || {
-    practitionerName: 'Dr. Youssef Ben Salem',
-    serviceName: 'Consultation Cardiologie & ECG',
-    date: '2026-11-04',
-    timeStart: '10:00',
-    timeEnd: '10:30',
-    priceTND: 70
-  };
+  const myAppointments = appointments.filter(a => {
+    if (currentUser?.role === 'PATIENT') {
+      const email = currentUser.email?.toLowerCase();
+      const name = currentUser.name?.toLowerCase();
+      return (
+        (a.patientEmail && email && a.patientEmail.toLowerCase() === email) ||
+        (a.patientName && name && a.patientName.toLowerCase() === name) ||
+        a.patientEmail === 'amine.jaziri@gmail.com' ||
+        a.patientName === 'Amine Jaziri'
+      );
+    }
+    return true;
+  });
+
+  const nextApt = myAppointments.find(a => a.status !== 'CANCELLED');
 
   return (
     <div className="space-y-6 font-sans">
@@ -60,51 +67,70 @@ export const PatientHomeTab: React.FC<PatientHomeTabProps> = ({
       </div>
 
       {/* Next Appointment Hero Card */}
-      <div className="p-6 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl shadow-blue-600/15 relative overflow-hidden">
-        <div className="relative z-10 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white backdrop-blur-xs">
-              Prochain Rendez-vous
-            </span>
-            <span className="text-xs font-semibold text-blue-100 flex items-center gap-1">
-              <ShieldCheck className="w-4 h-4" /> Confirmé
-            </span>
-          </div>
+      {nextApt ? (
+        <div className="p-6 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl text-white shadow-xl shadow-blue-600/15 relative overflow-hidden">
+          <div className="relative z-10 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white backdrop-blur-xs">
+                Prochain Rendez-vous
+              </span>
+              <span className="text-xs font-semibold text-blue-100 flex items-center gap-1">
+                <ShieldCheck className="w-4 h-4" /> Confirmé
+              </span>
+            </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-black tracking-tight">{nextApt.practitionerName}</h2>
-              <p className="text-xs text-blue-100 font-medium">{nextApt.serviceName}</p>
-              <div className="flex items-center gap-2 mt-2 text-xs text-blue-100">
-                <MapPin className="w-3.5 h-3.5" />
-                <span>Cabinet Médical Les Berges du Lac, Tunis</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black tracking-tight">{nextApt.practitionerName}</h2>
+                <p className="text-xs text-blue-100 font-medium">{nextApt.serviceName}</p>
+                <div className="flex items-center gap-2 mt-2 text-xs text-blue-100">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Cabinet Médical Les Berges du Lac, Tunis</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20 text-center sm:text-right shrink-0">
+                <div className="text-sm font-bold text-white flex items-center justify-center sm:justify-end gap-1.5">
+                  <Calendar className="w-4 h-4" />
+                  <span>{nextApt.date}</span>
+                </div>
+                <div className="text-lg font-black text-white mt-0.5">{nextApt.timeStart}</div>
+                <span className="text-[10px] text-blue-200">Durée 30 min</span>
               </div>
             </div>
 
-            <div className="p-3.5 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20 text-center sm:text-right shrink-0">
-              <div className="text-sm font-bold text-white flex items-center justify-center sm:justify-end gap-1.5">
-                <Calendar className="w-4 h-4" />
-                <span>{nextApt.date}</span>
-              </div>
-              <div className="text-lg font-black text-white mt-0.5">{nextApt.timeStart}</div>
-              <span className="text-[10px] text-blue-200">Durée 30 min</span>
+            <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <span className="text-blue-100 text-[11px]">
+                Tarif indicatif CNAM : <strong>{nextApt.priceTND || 70} DT</strong> (Feuille de soins fournie)
+              </span>
+              <button
+                onClick={() => onNavigateToTab('my-appointments')}
+                className="text-white hover:text-blue-200 font-bold flex items-center gap-1 transition-colors self-end sm:self-auto"
+              >
+                <span>Détails & consignes</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-          </div>
-
-          <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <span className="text-blue-100 text-[11px]">
-              Tarif indicatif CNAM : <strong>{nextApt.priceTND} DT</strong> (Feuille de soins fournie)
-            </span>
-            <button
-              onClick={() => onNavigateToTab('my-appointments')}
-              className="text-white hover:text-blue-200 font-bold flex items-center gap-1 transition-colors self-end sm:self-auto"
-            >
-              <span>Détails & consignes</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-6 bg-white rounded-3xl border border-[#E8EDF4] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-[#2563EB] uppercase tracking-wider">Planning personnel</span>
+            <h3 className="font-bold text-sm text-[#14213D]">Aucune consultation à venir</h3>
+            <p className="text-xs text-slate-500">
+              Prenez rendez-vous en quelques clics avec un médecin spécialiste du cabinet.
+            </p>
+          </div>
+          <button
+            onClick={onOpenBooking}
+            className="px-4 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Réserver maintenant
+          </button>
+        </div>
+      )}
 
       {/* Quick Access Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -312,6 +312,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       if (credentials.email && credentials.password) {
         const isSuperAdmin = credentials.email.toLowerCase().includes('admin');
         const isPatient = credentials.email.toLowerCase().includes('patient') || credentials.email.toLowerCase().includes('jaziri');
+        const isSecretary = credentials.email.toLowerCase().includes('secretaire') || credentials.email.toLowerCase().includes('secretariat') || credentials.email.toLowerCase().includes('nadia');
         const isLegal = credentials.email.toLowerCase().includes('avocat') || credentials.email.toLowerCase().includes('selim');
         
         let demoUser: UserProfile;
@@ -331,6 +332,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
             email: credentials.email,
             role: 'PATIENT',
             organizationName: 'Espace Patient Amine',
+            sector: 'MEDICAL'
+          };
+        } else if (isSecretary) {
+          demoUser = {
+            id: 'sec-1',
+            name: 'Nadia Trabelsi',
+            email: credentials.email,
+            role: 'SECRETAIRE',
+            organizationName: 'Cabinet Médical Dr. Ben Salem',
             sector: 'MEDICAL'
           };
         } else {

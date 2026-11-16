@@ -35,6 +35,11 @@ export const EmailWorkspace: React.FC = () => {
   const selectedEmail = emails.find(e => e.id === selectedEmailId) || emails[0];
 
   const filteredEmails = emails.filter(e => {
+    // Sector-specific isolation: Medical emails vs Legal correspondences
+    const isLegalEmail = e.subject.toLowerCase().includes('juridique') || e.body.toLowerCase().includes('tribunal') || e.body.toLowerCase().includes('avocat') || e.body.toLowerCase().includes('société');
+    if (sector === 'MEDICAL' && isLegalEmail) return false;
+    if (sector === 'LEGAL' && !isLegalEmail && (e.intent === 'EMERGENCY' || e.body.toLowerCase().includes('palpitation') || e.body.toLowerCase().includes('cardio'))) return false;
+
     if (activeFolder === 'pending' && e.status !== 'PENDING_VALIDATION') return false;
     if (activeFolder === 'urgent' && e.intent !== 'EMERGENCY') return false;
     if (activeFolder === 'appointments' && e.intent !== 'APPOINTMENT') return false;
