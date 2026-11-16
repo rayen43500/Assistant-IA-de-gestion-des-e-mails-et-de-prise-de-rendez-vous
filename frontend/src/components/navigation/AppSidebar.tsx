@@ -15,7 +15,10 @@ import {
   Scale,
   ChevronRight,
   Globe,
-  X
+  X,
+  Clock,
+  Bell,
+  FileText
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 
@@ -39,24 +42,28 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const pendingEmailsCount = emails.filter(e => e.status === 'PENDING_VALIDATION').length;
   const emergencyCount = emails.filter(e => e.intent === 'EMERGENCY' && e.status !== 'VALIDATED_AND_SENT').length;
 
+  const isSecretary = currentUser.role === 'SECRETAIRE';
+
+  // 10 items matching MEDILAWAI – MEDICAL WORKSPACE UI/UX DESIGN
   const navItems = [
-    { id: 'dashboard', label: 'Vue d’ensemble', icon: LayoutDashboard },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'appointments', label: 'Rendez-vous', icon: Calendar },
+    { id: 'availabilities', label: 'Disponibilités', icon: Clock, doctorOnly: true },
+    { id: 'contacts', label: sector === 'MEDICAL' ? 'Patients' : 'Clients', icon: Users },
     { 
       id: 'emails', 
-      label: 'Boîte E-mails IA', 
+      label: 'E-mails', 
       icon: Inbox, 
       badge: pendingEmailsCount > 0 ? pendingEmailsCount : undefined,
       urgentBadge: emergencyCount > 0 ? emergencyCount : undefined 
     },
-    { id: 'appointments', label: 'Rendez-vous & Agenda', icon: Calendar },
-    { id: 'contacts', label: sector === 'MEDICAL' ? 'Patients du Cabinet' : 'Clients & Dossiers', icon: Users },
-    { id: 'ai-assistant', label: 'Assistant IA & Copilot', icon: Bot, isAi: true },
-    { id: 'knowledge', label: 'Base RAG Certifiée', icon: BookOpen },
-    { id: 'automations', label: 'Workflows n8n', icon: Workflow },
-    { id: 'analytics', label: 'Analytiques & Rapports', icon: BarChart3 },
-    { id: 'settings', label: 'Paramètres & Autonomie', icon: Settings },
-    { id: 'super-admin', label: 'Super Admin SaaS', icon: ShieldAlert, isAdmin: true }
-  ];
+    { id: 'ai-assistant', label: 'Assistant IA', icon: Bot, isAi: true },
+    { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'notifications', label: 'Notifications', icon: Bell, urgentBadge: emergencyCount > 0 ? emergencyCount : undefined },
+    { id: 'analytics', label: 'Statistiques', icon: BarChart3, doctorOnly: true },
+    { id: 'settings', label: 'Paramètres', icon: Settings },
+    { id: 'super-admin', label: 'Super Admin', icon: ShieldAlert, isAdmin: true }
+  ].filter(item => !(isSecretary && item.doctorOnly));
 
   const handleItemClick = (id: string) => {
     onSelectTab(id);
@@ -186,7 +193,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               </div>
               <div className="overflow-hidden">
                 <div className="text-xs font-bold text-white truncate">{currentUser.name}</div>
-                <div className="text-[10px] text-slate-400 truncate">{currentUser.organizationName}</div>
+                <div className="text-[10px] text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${isSecretary ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                    {isSecretary ? 'Secrétariat' : 'Praticien'}
+                  </span>
+                  <span className="truncate">{currentUser.organizationName}</span>
+                </div>
               </div>
             </div>
             <button 

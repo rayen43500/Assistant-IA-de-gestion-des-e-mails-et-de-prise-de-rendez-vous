@@ -13,6 +13,9 @@ import { AnalyticsReportsView } from './components/analytics/AnalyticsReportsVie
 import { EnterpriseSettingsView } from './components/settings/EnterpriseSettingsView';
 import { SuperAdminPlatformView } from './components/admin/SuperAdminPlatformView';
 import { SuperAdminLayout } from './components/superadmin/SuperAdminLayout';
+import { MedicalAvailabilityView } from './components/medical/MedicalAvailabilityView';
+import { MedicalDocumentsView } from './components/medical/MedicalDocumentsView';
+import { MedicalNotificationsCenterView } from './components/medical/MedicalNotificationsCenterView';
 import KnowledgeView from './components/KnowledgeView.jsx';
 import N8nAutomationsView from './components/N8nAutomationsView.jsx';
 import { ToastNotification } from './components/common/ToastNotification';
@@ -129,20 +132,28 @@ export default function App() {
                 />
               )}
 
-              {currentTab === 'emails' && (
-                <EmailWorkspace />
-              )}
-
               {currentTab === 'appointments' && (
                 <AppointmentCalendarView />
+              )}
+
+              {currentTab === 'availabilities' && (
+                <MedicalAvailabilityView />
               )}
 
               {currentTab === 'contacts' && (
                 <ContactsDirectoryView />
               )}
 
+              {currentTab === 'emails' && (
+                <EmailWorkspace />
+              )}
+
               {currentTab === 'ai-assistant' && (
                 <AiAssistantWorkspace />
+              )}
+
+              {currentTab === 'documents' && (
+                <MedicalDocumentsView />
               )}
 
               {currentTab === 'knowledge' && (
@@ -152,6 +163,13 @@ export default function App() {
                   onQueryRag={async (q: string) => {
                     return `Selon la base certifiée : ${documents[0].content}`;
                   }}
+                />
+              )}
+
+              {currentTab === 'notifications' && (
+                <MedicalNotificationsCenterView 
+                  onNavigateToEmails={() => setCurrentTab('emails')}
+                  onNavigateToCalendar={() => setCurrentTab('appointments')}
                 />
               )}
 
