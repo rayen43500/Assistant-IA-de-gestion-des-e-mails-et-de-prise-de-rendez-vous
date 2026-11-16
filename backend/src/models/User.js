@@ -20,8 +20,8 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['ADMIN', 'PRATICIEN', 'SECRETAIRE'],
-    default: 'SECRETAIRE',
+    enum: ['SUPER_ADMIN', 'ADMIN', 'PRATICIEN', 'PATIENT'],
+    default: 'PRATICIEN',
   },
   clinicId: {
     type: mongoose.Schema.Types.ObjectId,

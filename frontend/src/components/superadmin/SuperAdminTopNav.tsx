@@ -18,11 +18,13 @@ import { useAppStore } from '../../stores/useAppStore';
 interface SuperAdminTopNavProps {
   onToggleMobileMenu: () => void;
   onOpenCreateCabinet?: () => void;
+  onLogout?: () => void;
 }
 
 export const SuperAdminTopNav: React.FC<SuperAdminTopNavProps> = ({
   onToggleMobileMenu,
-  onOpenCreateCabinet
+  onOpenCreateCabinet,
+  onLogout
 }) => {
   const { currentUser, logout, isBackendConnected } = useAppStore();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -151,7 +153,8 @@ export const SuperAdminTopNav: React.FC<SuperAdminTopNavProps> = ({
               <button
                 onClick={() => {
                   setShowAdminMenu(false);
-                  logout();
+                  if (onLogout) onLogout();
+                  else logout();
                 }}
                 className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-2"
               >

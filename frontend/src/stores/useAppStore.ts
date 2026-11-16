@@ -312,14 +312,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       if (credentials.email && credentials.password) {
         const isSuperAdmin = credentials.email.toLowerCase().includes('admin');
         const isPatient = credentials.email.toLowerCase().includes('patient') || credentials.email.toLowerCase().includes('jaziri');
-        const isSecretary = credentials.email.toLowerCase().includes('secretaire') || credentials.email.toLowerCase().includes('secretariat') || credentials.email.toLowerCase().includes('nadia');
         const isLegal = credentials.email.toLowerCase().includes('avocat') || credentials.email.toLowerCase().includes('selim');
         
         let demoUser: UserProfile;
         if (isSuperAdmin) {
+          let adminName = 'Amine Mansour';
+          if (credentials.email.toLowerCase().includes('sarra')) adminName = 'Sarra Kallel';
+          else if (credentials.email.toLowerCase().includes('hedi')) adminName = 'Hedi Bouzid';
+
           demoUser = {
             id: 'admin-super-1',
-            name: 'Amine Mansour',
+            name: adminName,
             email: credentials.email,
             role: 'SUPER_ADMIN',
             organizationName: 'MediLawAI Platform Inc.',
@@ -332,15 +335,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
             email: credentials.email,
             role: 'PATIENT',
             organizationName: 'Espace Patient Amine',
-            sector: 'MEDICAL'
-          };
-        } else if (isSecretary) {
-          demoUser = {
-            id: 'sec-1',
-            name: 'Nadia Trabelsi',
-            email: credentials.email,
-            role: 'SECRETAIRE',
-            organizationName: 'Cabinet Médical Dr. Ben Salem',
             sector: 'MEDICAL'
           };
         } else {
@@ -413,8 +407,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   logout: () => {
     apiLogout();
+    localStorage.removeItem('medilaw_jwt_token');
     set({
-      isAuthenticated: false
+      isAuthenticated: false,
+      currentUser: {
+        id: 'u-1',
+        name: 'Dr. Youssef Ben Salem',
+        email: 'dr.bensalem@cabinet-ai.tn',
+        role: 'PRATICIEN',
+        organizationName: 'Cabinet Médical Dr. Ben Salem',
+        sector: 'MEDICAL'
+      }
     });
   },
 
@@ -521,7 +524,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         reason: apt.serviceName,
         date: apt.date,
         timeSlot: { start: apt.timeStart, end: apt.timeEnd },
-        source: 'MANUAL_SECRETARY'
+        source: 'MANUAL_CABINET'
       } as any);
       set({ isBackendConnected: true });
     } catch (err: any) {

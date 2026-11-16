@@ -49,14 +49,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleQuickDemo = (role: 'DOCTOR' | 'SECRETARY' | 'LAWYER' | 'ADMIN' | 'PATIENT') => {
+  const handleQuickDemo = (role: 'DOCTOR' | 'LAWYER' | 'ADMIN' | 'PATIENT') => {
     setMode('LOGIN');
     setErrorMessage(null);
     if (role === 'DOCTOR') {
       setLoginEmail('dr.bensalem@cabinet-ai.tn');
-      setLoginPassword('Password2026!');
-    } else if (role === 'SECRETARY') {
-      setLoginEmail('secretariat@cabinet-ai.tn');
       setLoginPassword('Password2026!');
     } else if (role === 'LAWYER') {
       setLoginEmail('me.trabelsi@avocats-tunis.tn');
@@ -184,45 +181,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <KeyRound className="w-3.5 h-3.5 text-blue-600" /> Profils de Démonstration Rapide :
                 </span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
                   onClick={() => handleQuickDemo('DOCTOR')}
-                  className="px-2 py-1.5 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
+                  className="px-2.5 py-2 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-xs font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1.5 truncate shadow-xs"
                 >
-                  <Stethoscope className="w-3 h-3 text-blue-600 shrink-0" />
+                  <Stethoscope className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <span className="truncate">Médecin</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleQuickDemo('SECRETARY')}
-                  className="px-2 py-1.5 bg-white hover:bg-amber-100/60 border border-amber-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
-                >
-                  <User className="w-3 h-3 text-amber-600 shrink-0" />
-                  <span className="truncate">Secrétaire</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => handleQuickDemo('LAWYER')}
-                  className="px-2 py-1.5 bg-white hover:bg-purple-100/60 border border-purple-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
+                  className="px-2.5 py-2 bg-white hover:bg-purple-100/60 border border-purple-200 rounded-xl text-xs font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1.5 truncate shadow-xs"
                 >
-                  <Scale className="w-3 h-3 text-purple-600 shrink-0" />
+                  <Scale className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                   <span className="truncate">Avocat</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleQuickDemo('ADMIN')}
-                  className="px-2 py-1.5 bg-white hover:bg-rose-100/60 border border-rose-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
+                  className="px-2.5 py-2 bg-white hover:bg-rose-100/60 border border-rose-200 rounded-xl text-xs font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1.5 truncate shadow-xs"
                 >
-                  <ShieldCheck className="w-3 h-3 text-rose-600 shrink-0" />
-                  <span className="truncate">Admin</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  <span className="truncate">Super Admin</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleQuickDemo('PATIENT')}
-                  className="px-2 py-1.5 bg-white hover:bg-emerald-100/60 border border-emerald-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs col-span-2 sm:col-span-1"
+                  className="px-2.5 py-2 bg-white hover:bg-emerald-100/60 border border-emerald-200 rounded-xl text-xs font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1.5 truncate shadow-xs"
                 >
-                  <User className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <span className="truncate">Patient</span>
                 </button>
               </div>

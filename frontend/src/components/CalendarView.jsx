@@ -50,7 +50,7 @@ export default function CalendarView({ appointments, onAddAppointment, onCancelA
       date: selectedDate,
       timeSlot: { start: startTime, end: startTime },
       status: 'CONFIRMED',
-      source: 'MANUAL_SECRETARY',
+      source: 'MANUAL_CABINET',
     });
 
     setShowModal(false);

@@ -27,17 +27,19 @@ export const AdminUsersTab: React.FC = () => {
   // Add form state
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [newRole, setNewRole] = useState<'PRATICIEN' | 'SECRETAIRE' | 'ADMIN' | 'SUPER_ADMIN'>('PRATICIEN');
+  const [newRole, setNewRole] = useState<'PRATICIEN' | 'ADMIN' | 'SUPER_ADMIN'>('PRATICIEN');
   const [newCabinet, setNewCabinet] = useState('Cabinet Médical Dr. Ben Salem');
   const [newTwoFactor, setNewTwoFactor] = useState(true);
 
   const [users, setUsers] = useState([
+    { id: 'usr-admin-1', name: 'Amine Mansour', email: 'admin@medilaw.ai', role: 'SUPER_ADMIN', cabinet: 'MediLawAI Platform Inc.', twoFactor: true, lastLogin: 'En ligne', status: 'ACTIVE' },
+    { id: 'usr-admin-2', name: 'Sarra Kallel', email: 'sarra.admin@medilaw.ai', role: 'SUPER_ADMIN', cabinet: 'MediLawAI Platform Inc.', twoFactor: true, lastLogin: 'Il y a 15 min', status: 'ACTIVE' },
+    { id: 'usr-admin-3', name: 'Hedi Bouzid', email: 'hedi.security@medilaw.ai', role: 'SUPER_ADMIN', cabinet: 'MediLawAI Platform Inc.', twoFactor: true, lastLogin: 'Il y a 1h', status: 'ACTIVE' },
     { id: 'usr-1', name: 'Dr. Youssef Ben Salem', email: 'dr.bensalem@cabinet-ai.tn', role: 'PRATICIEN', cabinet: 'Cabinet Médical Dr. Ben Salem', twoFactor: true, lastLogin: 'Il y a 14 min', status: 'ACTIVE' },
-    { id: 'usr-2', name: 'Nadia Trabelsi', email: 'secretariat@cabinet-ai.tn', role: 'SECRETAIRE', cabinet: 'Cabinet Médical Dr. Ben Salem', twoFactor: true, lastLogin: 'Il y a 3 min', status: 'ACTIVE' },
+    { id: 'usr-2', name: 'Dr. Nadia Trabelsi', email: 'dr.nadia@cabinet-ai.tn', role: 'PRATICIEN', cabinet: 'Cabinet Médical Dr. Ben Salem', twoFactor: true, lastLogin: 'Il y a 3 min', status: 'ACTIVE' },
     { id: 'usr-3', name: 'Me. Selim Trabelsi', email: 'me.trabelsi@avocats-tunis.tn', role: 'PRATICIEN', cabinet: 'Cabinet d’Avocats Selim Trabelsi', twoFactor: true, lastLogin: 'Il y a 2h', status: 'ACTIVE' },
-    { id: 'usr-4', name: 'Sonia Mabrouk', email: 's.mabrouk@avocats-tunis.tn', role: 'SECRETAIRE', cabinet: 'Cabinet d’Avocats Selim Trabelsi', twoFactor: false, lastLogin: 'Aujourd’hui 09:12', status: 'ACTIVE' },
-    { id: 'usr-5', name: 'Dr. Mehdi Chaouch', email: 'dr.chaouch@clinique-lac.tn', role: 'ADMIN', cabinet: 'Clinique Dentaire Les Berges du Lac', twoFactor: true, lastLogin: 'Il y a 30 min', status: 'ACTIVE' },
-    { id: 'usr-6', name: 'Amine Mansour', email: 'admin@medilaw.ai', role: 'SUPER_ADMIN', cabinet: 'MediLawAI Platform Inc.', twoFactor: true, lastLogin: 'En ligne', status: 'ACTIVE' }
+    { id: 'usr-4', name: 'Me. Sonia Mabrouk', email: 's.mabrouk@avocats-tunis.tn', role: 'PRATICIEN', cabinet: 'Cabinet d’Avocats Selim Trabelsi', twoFactor: false, lastLogin: 'Aujourd’hui 09:12', status: 'ACTIVE' },
+    { id: 'usr-5', name: 'Dr. Mehdi Chaouch', email: 'dr.chaouch@clinique-lac.tn', role: 'ADMIN', cabinet: 'Clinique Dentaire Les Berges du Lac', twoFactor: true, lastLogin: 'Il y a 30 min', status: 'ACTIVE' }
   ]);
 
   const handleAddUser = (e: React.FormEvent) => {
@@ -132,7 +134,10 @@ export const AdminUsersTab: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl shadow-2xs">
+            Super Admins : <strong>{users.filter(u => u.role === 'SUPER_ADMIN').length}</strong>
+          </span>
           <span className="text-xs font-bold text-slate-600 bg-white border border-[#E8EDF4] px-3 py-1.5 rounded-xl shadow-2xs">
             Comptes : <strong>{users.length}</strong>
           </span>
@@ -160,7 +165,7 @@ export const AdminUsersTab: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {['ALL', 'PRATICIEN', 'SECRETAIRE', 'ADMIN', 'SUPER_ADMIN'].map(r => (
+          {['ALL', 'PRATICIEN', 'ADMIN', 'SUPER_ADMIN'].map(r => (
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
@@ -170,7 +175,7 @@ export const AdminUsersTab: React.FC = () => {
                   : 'bg-[#F7F9FC] border border-[#E8EDF4] text-slate-600 hover:bg-slate-100'
               }`}
             >
-              {r === 'ALL' ? 'Tous' : r}
+              {r === 'ALL' ? 'Tous' : r === 'PRATICIEN' ? 'Praticiens' : r === 'ADMIN' ? 'Admins Cabinet' : 'Super Admins'}
             </button>
           ))}
         </div>
@@ -316,7 +321,6 @@ export const AdminUsersTab: React.FC = () => {
                     className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
                   >
                     <option value="PRATICIEN">Praticien (Docteur / Avocat)</option>
-                    <option value="SECRETAIRE">Secrétaire / Assistant(e)</option>
                     <option value="ADMIN">Administrateur Cabinet</option>
                     <option value="SUPER_ADMIN">Super Admin Plateforme</option>
                   </select>
@@ -416,7 +420,6 @@ export const AdminUsersTab: React.FC = () => {
                     className="w-full px-3 py-2 bg-[#F7F9FC] border border-[#E8EDF4] rounded-xl text-xs"
                   >
                     <option value="PRATICIEN">Praticien (Docteur / Avocat)</option>
-                    <option value="SECRETAIRE">Secrétaire / Assistant(e)</option>
                     <option value="ADMIN">Administrateur Cabinet</option>
                     <option value="SUPER_ADMIN">Super Admin Plateforme</option>
                   </select>

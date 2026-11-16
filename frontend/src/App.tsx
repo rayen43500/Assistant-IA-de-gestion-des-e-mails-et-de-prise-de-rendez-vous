@@ -25,6 +25,7 @@ import { useAppStore } from './stores/useAppStore';
 export default function App() {
   const [inAppMode, setInAppMode] = useState<boolean>(true); // Default to SaaS app directly, can toggle to landing
   const [patientMode, setPatientMode] = useState<boolean>(false);
+  const [cabinetPreviewMode, setCabinetPreviewMode] = useState<boolean>(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authModalMode, setAuthModalMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
@@ -54,7 +55,20 @@ export default function App() {
     }
   ]);
 
-  const { addEmail, loadEmails, loadAppointments, checkConnection, currentUser } = useAppStore();
+  const { addEmail, loadEmails, loadAppointments, checkConnection, currentUser, logout, showToast } = useAppStore();
+
+  const handleLogout = () => {
+    logout();
+    setInAppMode(false);
+    setPatientMode(false);
+    setCabinetPreviewMode(false);
+    setCurrentTab('dashboard');
+    showToast({
+      title: 'Déconnexion effectuée',
+      message: 'Votre session a été fermée avec succès.',
+      type: 'info'
+    });
+  };
 
   useEffect(() => {
     // Connexion automatique et chargement dynamique depuis le backend
@@ -76,6 +90,16 @@ export default function App() {
         onSuccess={() => {
           setShowAuthModal(false);
           setInAppMode(true);
+          setCabinetPreviewMode(false);
+          const u = useAppStore.getState().currentUser;
+          if (u?.role === 'PATIENT') {
+            setPatientMode(true);
+          } else {
+            setPatientMode(false);
+          }
+          if (u?.role === 'SUPER_ADMIN') {
+            setCurrentTab('dashboard');
+          }
         }}
       />
 
@@ -95,49 +119,103 @@ export default function App() {
       {/* Public Landing Page Mode */}
       {!inAppMode ? (
         <PublicLandingPage
-          onEnterApp={() => setInAppMode(true)}
+          onEnterApp={() => {
+            setInAppMode(true);
+            setCabinetPreviewMode(false);
+          }}
           onOpenOnboarding={() => setShowOnboarding(true)}
           onOpenAuth={(mode) => {
             setAuthModalMode(mode);
             setShowAuthModal(true);
           }}
           onOpenPatientPortal={() => {
+            const state = useAppStore.getState();
+            if (state.currentUser?.role !== 'PATIENT') {
+              state.setCurrentUser({
+                id: 'patient-1',
+                name: 'Amine Jaziri',
+                email: 'amine.jaziri@gmail.com',
+                role: 'PATIENT',
+                organizationName: 'Espace Patient Amine',
+                sector: 'MEDICAL'
+              });
+            }
             setPatientMode(true);
             setInAppMode(true);
+            setCabinetPreviewMode(false);
           }}
         />
-      ) : currentUser?.role === 'SUPER_ADMIN' || currentTab === 'super-admin' ? (
+      ) : (currentUser?.role === 'SUPER_ADMIN' && !cabinetPreviewMode) || currentTab === 'super-admin' ? (
         /* Dedicated Premium Super Admin Platform Layout */
-        <SuperAdminLayout onExitSuperAdmin={() => setCurrentTab('dashboard')} />
+        <SuperAdminLayout 
+          onExitSuperAdmin={() => {
+            setCabinetPreviewMode(true);
+            setCurrentTab('dashboard');
+            showToast({
+              title: 'Mode Cabinet activé',
+              message: 'Vous explorez l\'interface cabinet en tant que Super Admin.',
+              type: 'info'
+            });
+          }}
+          onLogout={handleLogout}
+        />
       ) : currentUser?.role === 'PATIENT' || patientMode ? (
         /* Dedicated Premium Patient Portal Layout */
-        <PatientPortalLayout onExitPortal={() => { setPatientMode(false); setCurrentTab('dashboard'); }} />
+        <PatientPortalLayout 
+          onExitPortal={() => { 
+            setPatientMode(false); 
+            setCurrentTab('dashboard'); 
+          }} 
+          onLogout={handleLogout}
+        />
       ) : (
         /* Authenticated SaaS Professional Workspace */
-        <div className="flex h-screen overflow-hidden">
-          {/* Main App Sidebar with Mobile Support */}
-          <AppSidebar
-            currentTab={currentTab}
-            onSelectTab={setCurrentTab}
-            onBackToLanding={() => setInAppMode(false)}
-            isOpenMobile={mobileMenuOpen}
-            onCloseMobile={() => setMobileMenuOpen(false)}
-          />
+        <div className="flex h-screen overflow-hidden flex-col">
+          {currentUser?.role === 'SUPER_ADMIN' && cabinetPreviewMode && (
+            <div className="bg-[#14213D] text-white text-xs px-4 py-2 flex items-center justify-between shrink-0 border-b border-blue-900 shadow-sm z-30">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                <span className="font-bold">Aperçu Cabinet Médical</span>
+                <span className="text-slate-400 hidden sm:inline">• Connecté en Super Admin ({currentUser.name})</span>
+              </div>
+              <button
+                onClick={() => setCabinetPreviewMode(false)}
+                className="bg-[#2563EB] hover:bg-blue-600 text-white font-bold px-3 py-1 rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-xs"
+              >
+                <span>Retour Console Super Admin</span>
+                <span>↗</span>
+              </button>
+            </div>
+          )}
 
-          {/* Center Work Area */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {/* Top Navigation Bar with Hamburger */}
-            <AppTopHeader
-              onOpenQuickAppointment={() => setCurrentTab('appointments')}
-              onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
-              onOpenAuthModal={() => {
-                setAuthModalMode('LOGIN');
-                setShowAuthModal(true);
-              }}
+          <div className="flex flex-1 overflow-hidden">
+            {/* Main App Sidebar with Mobile Support */}
+            <AppSidebar
+              currentTab={currentTab}
+              onSelectTab={setCurrentTab}
+              onBackToLanding={handleLogout}
+              onLogout={handleLogout}
+              isOpenMobile={mobileMenuOpen}
+              onCloseMobile={() => setMobileMenuOpen(false)}
+              isSuperAdmin={currentUser?.role === 'SUPER_ADMIN'}
+              onReturnToSuperAdmin={currentUser?.role === 'SUPER_ADMIN' ? () => setCabinetPreviewMode(false) : undefined}
             />
 
-            {/* Scrollable Main Workspace Content */}
-            <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+            {/* Center Work Area */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              {/* Top Navigation Bar with Hamburger */}
+              <AppTopHeader
+                onOpenQuickAppointment={() => setCurrentTab('appointments')}
+                onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+                onOpenAuthModal={() => {
+                  setAuthModalMode('LOGIN');
+                  setShowAuthModal(true);
+                }}
+                onLogout={handleLogout}
+              />
+
+              {/* Scrollable Main Workspace Content */}
+              <main className="flex-1 overflow-y-auto p-4 sm:p-6">
               {currentTab === 'dashboard' && (
                 <EnterpriseDashboard
                   onNavigateToEmails={() => setCurrentTab('emails')}
@@ -209,6 +287,7 @@ export default function App() {
             </main>
           </div>
         </div>
+      </div>
       )}
     </div>
   );

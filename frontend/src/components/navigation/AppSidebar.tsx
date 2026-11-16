@@ -26,30 +26,35 @@ interface AppSidebarProps {
   currentTab: string;
   onSelectTab: (tab: string) => void;
   onBackToLanding: () => void;
+  onLogout?: () => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
+  isSuperAdmin?: boolean;
+  onReturnToSuperAdmin?: () => void;
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ 
   currentTab, 
   onSelectTab, 
   onBackToLanding,
+  onLogout,
   isOpenMobile = false,
-  onCloseMobile
+  onCloseMobile,
+  isSuperAdmin = false,
+  onReturnToSuperAdmin
 }) => {
   const { sector, setSector, organizationName, emails, currentUser } = useAppStore();
 
   const pendingEmailsCount = emails.filter(e => e.status === 'PENDING_VALIDATION').length;
   const emergencyCount = emails.filter(e => e.intent === 'EMERGENCY' && e.status !== 'VALIDATED_AND_SENT').length;
 
-  const isSecretary = currentUser.role === 'SECRETAIRE';
-  const isSuperAdmin = currentUser.role === 'SUPER_ADMIN';
+  const isSuperAdminRole = isSuperAdmin || currentUser?.role === 'SUPER_ADMIN';
 
-  // Navigation items scoped strictly by role (Doctor vs Secretary vs Super Admin)
+  // Navigation items for the Practitioner / Cabinet Workspace (10 core tabs)
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'appointments', label: 'Rendez-vous', icon: Calendar },
-    { id: 'availabilities', label: 'Disponibilités', icon: Clock, doctorOnly: true },
+    { id: 'availabilities', label: 'Disponibilités', icon: Clock },
     { id: 'contacts', label: sector === 'MEDICAL' ? 'Patients' : 'Clients', icon: Users },
     { 
       id: 'emails', 
@@ -61,10 +66,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     { id: 'ai-assistant', label: 'Assistant IA', icon: Bot, isAi: true },
     { id: 'documents', label: 'Documents', icon: FileText },
     { id: 'notifications', label: 'Notifications', icon: Bell, urgentBadge: emergencyCount > 0 ? emergencyCount : undefined },
-    { id: 'analytics', label: 'Statistiques', icon: BarChart3, doctorOnly: true },
+    { id: 'analytics', label: 'Statistiques', icon: BarChart3 },
     { id: 'settings', label: 'Paramètres', icon: Settings },
-    ...(isSuperAdmin ? [{ id: 'super-admin', label: 'Super Admin', icon: ShieldAlert, isAdmin: true }] : [])
-  ].filter(item => !(isSecretary && item.doctorOnly));
+    ...(isSuperAdminRole ? [{ id: 'super-admin', label: 'Super Admin', icon: ShieldAlert, isAdmin: true }] : [])
+  ];
 
   const handleItemClick = (id: string) => {
     onSelectTab(id);
@@ -185,6 +190,22 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           </nav>
         </div>
 
+        {/* Return to Super Admin Console if switched */}
+        {onReturnToSuperAdmin && (
+          <div className="p-3 border-t border-slate-800 bg-blue-950/40">
+            <button
+              onClick={onReturnToSuperAdmin}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-xs"
+            >
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-200" />
+                <span>Console Super Admin</span>
+              </div>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* User profile footer */}
         <div className="p-3.5 border-t border-slate-800 bg-slate-900/60">
           <div className="flex items-center justify-between">
@@ -195,15 +216,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               <div className="overflow-hidden">
                 <div className="text-xs font-bold text-white truncate">{currentUser.name}</div>
                 <div className="text-[10px] text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${isSecretary ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'}`}>
-                    {isSecretary ? 'Secrétariat' : 'Praticien'}
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/20 text-blue-300">
+                    {sector === 'MEDICAL' ? 'Médecin Praticien' : 'Avocat Associé'}
                   </span>
                   <span className="truncate">{currentUser.organizationName}</span>
                 </div>
               </div>
             </div>
             <button 
-              onClick={onBackToLanding} 
+              onClick={onLogout || onBackToLanding} 
               title="Déconnexion" 
               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
             >

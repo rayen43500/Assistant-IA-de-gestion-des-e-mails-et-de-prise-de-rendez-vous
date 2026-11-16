@@ -36,7 +36,7 @@ export const AppointmentCalendarView: React.FC = () => {
     showToast 
   } = useAppStore();
 
-  const [selectedView, setSelectedView] = useState<'WEEK' | 'DAY'>('WEEK');
+  const [selectedView, setSelectedView] = useState<'WEEK' | 'DAY' | 'MONTH'>('WEEK');
   const [showModal, setShowModal] = useState(false);
   const [selectedApt, setSelectedApt] = useState<AppointmentItem | null>(null);
   const [isEditingSelected, setIsEditingSelected] = useState(false);
@@ -195,16 +195,22 @@ export const AppointmentCalendarView: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className="p-1 bg-white border border-[#E5EAF2] rounded-xl flex items-center text-xs font-bold text-slate-600 shadow-xs">
             <button
+              onClick={() => setSelectedView('DAY')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${selectedView === 'DAY' ? 'bg-[#2563EB] text-white shadow-2xs' : 'hover:text-slate-900'}`}
+            >
+              Jour
+            </button>
+            <button
               onClick={() => setSelectedView('WEEK')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${selectedView === 'WEEK' ? 'bg-blue-600 text-white' : 'hover:text-slate-900'}`}
+              className={`px-3 py-1.5 rounded-lg transition-all ${selectedView === 'WEEK' ? 'bg-[#2563EB] text-white shadow-2xs' : 'hover:text-slate-900'}`}
             >
               Semaine
             </button>
             <button
-              onClick={() => setSelectedView('DAY')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${selectedView === 'DAY' ? 'bg-blue-600 text-white' : 'hover:text-slate-900'}`}
+              onClick={() => setSelectedView('MONTH')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${selectedView === 'MONTH' ? 'bg-[#2563EB] text-white shadow-2xs' : 'hover:text-slate-900'}`}
             >
-              Jour
+              Mois
             </button>
           </div>
 
@@ -240,84 +246,219 @@ export const AppointmentCalendarView: React.FC = () => {
         <span className="text-[11px] text-slate-400 font-mono shrink-0">Dernière synchronisation : Il y a 1 min</span>
       </div>
 
-      {/* Calendar Grid (Week View) */}
-      <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs overflow-x-auto">
-        <div className="min-w-[750px]">
-          {/* Days Header */}
-          <div className="grid grid-cols-6 border-b border-[#E5EAF2] bg-[#F7F9FC] text-center text-xs font-bold text-slate-700">
-            <div className="p-3 border-r border-[#E5EAF2] text-slate-400">Créneau</div>
-            {weekDays.map(d => (
-              <div key={d.date} className={`p-3 border-r border-[#E5EAF2] last:border-r-0 ${d.date === '2026-11-03' ? 'bg-blue-50/60 text-blue-700' : ''}`}>
-                <div>{d.name}</div>
-                <div className="text-[10px] text-slate-400 font-normal">{d.date}</div>
-              </div>
-            ))}
+      {/* Calendar Grid (Week View, Day View, Month View) */}
+      {selectedView === 'WEEK' && (
+        <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs overflow-x-auto">
+          <div className="min-w-[750px]">
+            {/* Days Header */}
+            <div className="grid grid-cols-6 border-b border-[#E5EAF2] bg-[#F7F9FC] text-center text-xs font-bold text-slate-700">
+              <div className="p-3 border-r border-[#E5EAF2] text-slate-400">Créneau</div>
+              {weekDays.map(d => (
+                <div key={d.date} className={`p-3 border-r border-[#E5EAF2] last:border-r-0 ${d.date === '2026-11-03' ? 'bg-blue-50/60 text-blue-700' : ''}`}>
+                  <div>{d.name}</div>
+                  <div className="text-[10px] text-slate-400 font-normal">{d.date}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Time Slots rows */}
+            <div className="divide-y divide-slate-100">
+              {hours.map(slot => (
+                <div key={slot} className="grid grid-cols-6 text-xs min-h-[56px]">
+                  <div className="p-2 border-r border-[#E5EAF2] text-slate-400 font-mono text-[11px] flex items-center justify-center bg-[#F7F9FC]">
+                    {slot}
+                  </div>
+
+                  {weekDays.map(d => {
+                    const apt = appointments.find(a => a.date === d.date && a.timeStart === slot && a.status !== 'CANCELLED');
+                    const slotStatus = isSlotAvailable(d.date, slot);
+
+                    // Is lunch break slot?
+                    const isLunchBreak = slotStatus.reason?.includes('Pause Déjeuner') || (slot >= '12:30' && slot < '14:00');
+
+                    return (
+                      <div 
+                        key={`${d.date}-${slot}`} 
+                        className={`p-1.5 border-r border-[#E5EAF2] last:border-r-0 transition-colors relative ${
+                          d.date === '2026-11-03' ? 'bg-blue-50/10' : ''
+                        }`}
+                      >
+                        {apt ? (
+                          <div 
+                            onClick={() => openAptDetails(apt)}
+                            className="h-full p-2 rounded-lg bg-blue-100/80 hover:bg-blue-200/90 border border-blue-200 text-blue-900 flex flex-col justify-between shadow-xs cursor-pointer transition-all"
+                          >
+                            <div className="font-bold truncate text-[11px]">{apt.patientName}</div>
+                            <div className="text-[10px] text-blue-700 truncate">{apt.serviceName}</div>
+                            <div className="text-[9px] text-slate-500 font-mono flex items-center justify-between mt-1">
+                              <span>{apt.timeStart} - {apt.timeEnd}</span>
+                              <span className="text-emerald-700 font-bold">Google Synced</span>
+                            </div>
+                          </div>
+                        ) : isLunchBreak ? (
+                          <div className="h-full p-2 rounded-lg bg-amber-50/60 border border-amber-200/50 text-amber-800 flex items-center justify-center gap-1.5 shadow-2xs select-none">
+                            <Coffee className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="text-[10px] font-semibold text-amber-900">Pause Déjeuner</span>
+                          </div>
+                        ) : !slotStatus.available ? (
+                          <div className="h-full p-2 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400 flex items-center justify-center text-[10px] italic">
+                            Indisponible
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setAptDate(d.date);
+                              setAptTime(slot);
+                              setCollisionWarning(null);
+                              setShowModal(true);
+                            }}
+                            className="w-full h-full rounded-lg hover:bg-slate-50 opacity-0 hover:opacity-100 text-[10px] text-blue-600 font-semibold flex items-center justify-center transition-all"
+                          >
+                            + Réserver
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Day View */}
+      {selectedView === 'DAY' && (
+        <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E5EAF2] pb-3">
+            <div>
+              <h2 className="text-base font-bold text-[#14213D]">Planning Journalier — Mardi 03 Novembre 2026</h2>
+              <p className="text-xs text-slate-500">Vue horaire détaillée avec contacts patients et pauses</p>
+            </div>
+            <span className="text-xs font-bold text-[#2563EB] bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+              Aujourd'hui
+            </span>
           </div>
 
-          {/* Time Slots rows */}
           <div className="divide-y divide-slate-100">
-            {hours.map(slot => (
-              <div key={slot} className="grid grid-cols-6 text-xs min-h-[56px]">
-                <div className="p-2 border-r border-[#E5EAF2] text-slate-400 font-mono text-[11px] flex items-center justify-center bg-[#F7F9FC]">
-                  {slot}
-                </div>
+            {hours.map(slot => {
+              const apt = appointments.find(a => a.date === '2026-11-03' && a.timeStart === slot && a.status !== 'CANCELLED');
+              const isLunch = slot >= '12:30' && slot < '14:00';
 
-                {weekDays.map(d => {
-                  const apt = appointments.find(a => a.date === d.date && a.timeStart === slot && a.status !== 'CANCELLED');
-                  const slotStatus = isSlotAvailable(d.date, slot);
+              return (
+                <div key={slot} className="py-2.5 flex items-center gap-4 text-xs">
+                  <span className="w-16 font-mono font-bold text-slate-400 text-right">{slot}</span>
 
-                  // Is lunch break slot?
-                  const isLunchBreak = slotStatus.reason?.includes('Pause Déjeuner') || (slot >= '12:30' && slot < '14:00');
-
-                  return (
-                    <div 
-                      key={`${d.date}-${slot}`} 
-                      className={`p-1.5 border-r border-[#E5EAF2] last:border-r-0 transition-colors relative ${
-                        d.date === '2026-11-03' ? 'bg-blue-50/10' : ''
-                      }`}
-                    >
-                      {apt ? (
-                        <div 
-                          onClick={() => openAptDetails(apt)}
-                          className="h-full p-2 rounded-lg bg-blue-100/80 hover:bg-blue-200/90 border border-blue-200 text-blue-900 flex flex-col justify-between shadow-xs cursor-pointer transition-all"
-                        >
-                          <div className="font-bold truncate text-[11px]">{apt.patientName}</div>
-                          <div className="text-[10px] text-blue-700 truncate">{apt.serviceName}</div>
-                          <div className="text-[9px] text-slate-500 font-mono flex items-center justify-between mt-1">
-                            <span>{apt.timeStart} - {apt.timeEnd}</span>
-                            <span className="text-emerald-700 font-bold">Google Synced</span>
-                          </div>
+                  <div className="flex-1">
+                    {apt ? (
+                      <div 
+                        onClick={() => openAptDetails(apt)}
+                        className="p-3 bg-blue-50 hover:bg-blue-100/70 border border-blue-200 rounded-xl cursor-pointer transition-colors flex items-center justify-between"
+                      >
+                        <div>
+                          <div className="font-bold text-[#14213D] text-sm">{apt.patientName}</div>
+                          <div className="text-slate-600 text-xs">{apt.serviceName} • {apt.patientPhone}</div>
                         </div>
-                      ) : isLunchBreak ? (
-                        <div className="h-full p-2 rounded-lg bg-amber-50/60 border border-amber-200/50 text-amber-800 flex items-center justify-center gap-1.5 shadow-2xs select-none">
-                          <Coffee className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span className="text-[10px] font-semibold text-amber-900">Pause Déjeuner</span>
+                        <div className="text-right">
+                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            Google Synced
+                          </span>
                         </div>
-                      ) : !slotStatus.available ? (
-                        <div className="h-full p-2 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-400 flex items-center justify-center text-[10px] italic">
-                          Indisponible
-                        </div>
-                      ) : (
+                      </div>
+                    ) : isLunch ? (
+                      <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-amber-900 flex items-center gap-2">
+                        <Coffee className="w-4 h-4 text-amber-600" />
+                        <span className="font-bold">Pause Déjeuner Protégée du Cabinet</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between p-2 rounded-xl border border-dashed border-slate-200 hover:border-blue-300 transition-colors">
+                        <span className="text-slate-400 italic">Créneau disponible ({availabilitySettings.consultationDuration} min)</span>
                         <button
                           onClick={() => {
-                            setAptDate(d.date);
+                            setAptDate('2026-11-03');
                             setAptTime(slot);
                             setCollisionWarning(null);
                             setShowModal(true);
                           }}
-                          className="w-full h-full rounded-lg hover:bg-slate-50 opacity-0 hover:opacity-100 text-[10px] text-blue-600 font-semibold flex items-center justify-center transition-all"
+                          className="px-2.5 py-1 text-[11px] font-bold text-[#2563EB] hover:bg-blue-50 rounded-lg"
                         >
                           + Réserver
                         </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Month View */}
+      {selectedView === 'MONTH' && (
+        <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E5EAF2] pb-3">
+            <div>
+              <h2 className="text-base font-bold text-[#14213D]">Vue Mensuelle — Novembre 2026</h2>
+              <p className="text-xs text-slate-500">Aperçu général des 30 jours et volume de consultations</p>
+            </div>
+            <span className="text-xs font-bold text-slate-600 bg-[#F7F9FC] border border-[#E8EDF4] px-3 py-1 rounded-xl">
+              Novembre 2026
+            </span>
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(day => (
+              <div key={day} className="text-center font-bold text-xs text-slate-500 py-1.5 bg-[#F7F9FC] rounded-lg">
+                {day}
+              </div>
+            ))}
+
+            {Array.from({ length: 30 }, (_, i) => {
+              const dayNum = i + 1;
+              const dateStr = `2026-11-${dayNum.toString().padStart(2, '0')}`;
+              const dayApts = appointments.filter(a => a.date === dateStr && a.status !== 'CANCELLED');
+              const isToday = dayNum === 3;
+
+              return (
+                <div
+                  key={dayNum}
+                  onClick={() => {
+                    setSelectedView('DAY');
+                  }}
+                  className={`min-h-[72px] p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                    isToday 
+                      ? 'border-[#2563EB] bg-blue-50/50 shadow-xs ring-1 ring-[#2563EB]' 
+                      : 'border-[#E8EDF4] hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-bold ${isToday ? 'text-[#2563EB]' : 'text-slate-800'}`}>
+                      {dayNum}
+                    </span>
+                    {dayApts.length > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    {dayApts.slice(0, 1).map(a => (
+                      <div key={a.id} className="text-[9px] bg-blue-100 text-blue-900 px-1 py-0.5 rounded truncate font-medium">
+                        {a.timeStart} {a.patientName.split(' ')[0]}
+                      </div>
+                    ))}
+                    {dayApts.length > 1 && (
+                      <div className="text-[8px] text-slate-500 font-bold">
+                        +{dayApts.length - 1} autre(s)
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Appointment Detail / Edit Modal */}
       {selectedApt && (

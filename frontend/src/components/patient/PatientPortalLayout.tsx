@@ -23,11 +23,12 @@ import { PatientBookingModal } from './tabs/PatientBookingModal';
 
 interface PatientPortalLayoutProps {
   onExitPortal?: () => void;
+  onLogout?: () => void;
 }
 
 export type PatientTabId = 'home' | 'find-doctor' | 'my-appointments' | 'my-requests' | 'notifications' | 'profile';
 
-export const PatientPortalLayout: React.FC<PatientPortalLayoutProps> = ({ onExitPortal }) => {
+export const PatientPortalLayout: React.FC<PatientPortalLayoutProps> = ({ onExitPortal, onLogout }) => {
   const { currentUser, logout } = useAppStore();
   const [currentTab, setCurrentTab] = useState<PatientTabId>('home');
   const [isBookingOpen, setIsBookingOpen] = useState(false);
@@ -105,7 +106,7 @@ export const PatientPortalLayout: React.FC<PatientPortalLayoutProps> = ({ onExit
           </div>
 
           <button
-            onClick={logout}
+            onClick={onLogout || logout}
             title="Se déconnecter"
             className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
           >

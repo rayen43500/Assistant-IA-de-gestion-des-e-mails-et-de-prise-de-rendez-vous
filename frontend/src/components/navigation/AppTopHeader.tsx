@@ -18,12 +18,14 @@ interface AppTopHeaderProps {
   onOpenQuickAppointment: () => void;
   onToggleMobileMenu?: () => void;
   onOpenAuthModal?: () => void;
+  onLogout?: () => void;
 }
 
 export const AppTopHeader: React.FC<AppTopHeaderProps> = ({ 
   onOpenQuickAppointment,
   onToggleMobileMenu,
-  onOpenAuthModal
+  onOpenAuthModal,
+  onLogout
 }) => {
   const { sector, organizationName, language, setLanguage, emails, showToast, currentUser, logout, isAuthenticated } = useAppStore();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -174,12 +176,16 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({
               <button
                 onClick={() => {
                   setShowUserMenu(false);
-                  logout();
-                  showToast({
-                    title: 'Déconnexion effectuée',
-                    message: 'Votre session a été fermée avec succès.',
-                    type: 'info'
-                  });
+                  if (onLogout) {
+                    onLogout();
+                  } else {
+                    logout();
+                    showToast({
+                      title: 'Déconnexion effectuée',
+                      message: 'Votre session a été fermée avec succès.',
+                      type: 'info'
+                    });
+                  }
                 }}
                 className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-2"
               >

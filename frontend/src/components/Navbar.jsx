@@ -61,7 +61,6 @@ export default function Navbar({ currentClinic, onSwitchClinic, activeRole, onSw
             className="bg-transparent text-slate-200 font-semibold focus:outline-none cursor-pointer"
           >
             <option value="PRATICIEN" className="bg-slate-900">Praticien / Titulaire</option>
-            <option value="SECRETAIRE" className="bg-slate-900">Secrétaire</option>
             <option value="ADMIN" className="bg-slate-900">Administrateur</option>
           </select>
         </div>

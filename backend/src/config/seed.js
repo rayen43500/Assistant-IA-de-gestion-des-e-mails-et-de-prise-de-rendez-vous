@@ -55,11 +55,11 @@ export const seedInitialData = async () => {
       clinicId: medicalClinic._id,
     });
 
-    const secretaryUser = await User.create({
-      name: 'Sarra Mansouri (Secrétariat)',
-      email: 'secretaire@cabinet-ai.tn',
+    const partnerUser = await User.create({
+      name: 'Dr. Nadia Trabelsi',
+      email: 'dr.nadia@cabinet-ai.tn',
       password: 'Password123!',
-      role: 'SECRETAIRE',
+      role: 'PRATICIEN',
       clinicId: medicalClinic._id,
     });
 

@@ -36,6 +36,7 @@ interface SuperAdminSidebarProps {
   currentTab: SuperAdminTabId;
   onSelectTab: (tab: SuperAdminTabId) => void;
   onExitSuperAdmin?: () => void;
+  onLogout?: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
@@ -44,6 +45,7 @@ export const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
   currentTab,
   onSelectTab,
   onExitSuperAdmin,
+  onLogout,
   isMobileOpen = false,
   onCloseMobile
 }) => {
@@ -177,7 +179,7 @@ export const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
               </div>
 
               <button
-                onClick={logout}
+                onClick={onLogout || logout}
                 title="Se déconnecter"
                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
               >

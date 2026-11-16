@@ -16,9 +16,10 @@ import { AdminSettingsTab } from './tabs/AdminSettingsTab';
 
 interface SuperAdminLayoutProps {
   onExitSuperAdmin?: () => void;
+  onLogout?: () => void;
 }
 
-export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ onExitSuperAdmin }) => {
+export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ onExitSuperAdmin, onLogout }) => {
   const [currentTab, setCurrentTab] = useState<SuperAdminTabId>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -29,6 +30,7 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ onExitSuperA
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         onExitSuperAdmin={onExitSuperAdmin}
+        onLogout={onLogout}
         isMobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
@@ -39,6 +41,7 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ onExitSuperA
         <SuperAdminTopNav
           onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
           onOpenCreateCabinet={() => setCurrentTab('cabinets')}
+          onLogout={onLogout}
         />
 
         {/* Scrollable Main Content Area */}
