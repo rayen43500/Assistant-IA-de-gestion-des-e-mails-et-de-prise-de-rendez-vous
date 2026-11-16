@@ -86,16 +86,6 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
           {/* Boutons à droite */}
           <div className="flex items-center gap-2.5">
-            {onOpenPatientPortal && (
-              <button
-                onClick={onOpenPatientPortal}
-                className="text-xs font-bold text-[#2563EB] bg-blue-50/80 hover:bg-blue-100 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors hidden sm:flex items-center gap-1.5"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Portail Patient</span>
-              </button>
-            )}
-
             <button
               onClick={() => onOpenAuth ? onOpenAuth('LOGIN') : onEnterApp()}
               className="text-xs font-bold text-slate-700 hover:text-[#2563EB] px-3.5 py-2 rounded-xl transition-colors"
@@ -117,11 +107,6 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
       {/* 02. HERO SECTION */}
       <section className="pt-16 pb-16 px-6 relative overflow-hidden bg-gradient-to-b from-white via-[#F7F9FC] to-[#F7F9FC]">
         <div className="max-w-5xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200/80 text-[#2563EB] text-[11px] font-bold tracking-wide uppercase shadow-2xs">
-            <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
-            <span>AI-POWERED MEDICAL & LEGAL SECRETARIAT</span>
-          </div>
-
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#14213D] tracking-tight leading-[1.12]">
             Votre secrétariat. Plus intelligent. <br />
             <span className="text-[#2563EB]">Disponible 24h/24.</span>
