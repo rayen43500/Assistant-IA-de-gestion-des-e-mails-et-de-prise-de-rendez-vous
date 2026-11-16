@@ -4,7 +4,7 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  role: 'PRATICIEN' | 'SECRETAIRE' | 'ADMIN' | 'SUPER_ADMIN';
+  role: 'PRATICIEN' | 'SECRETAIRE' | 'ADMIN' | 'SUPER_ADMIN' | 'PATIENT';
   avatarUrl?: string;
   organizationName: string;
   sector: SectorType;

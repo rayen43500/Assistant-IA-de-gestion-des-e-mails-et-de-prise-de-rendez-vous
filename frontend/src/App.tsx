@@ -16,6 +16,7 @@ import { SuperAdminLayout } from './components/superadmin/SuperAdminLayout';
 import { MedicalAvailabilityView } from './components/medical/MedicalAvailabilityView';
 import { MedicalDocumentsView } from './components/medical/MedicalDocumentsView';
 import { MedicalNotificationsCenterView } from './components/medical/MedicalNotificationsCenterView';
+import { PatientPortalLayout } from './components/patient/PatientPortalLayout';
 import KnowledgeView from './components/KnowledgeView.jsx';
 import N8nAutomationsView from './components/N8nAutomationsView.jsx';
 import { ToastNotification } from './components/common/ToastNotification';
@@ -23,6 +24,7 @@ import { useAppStore } from './stores/useAppStore';
 
 export default function App() {
   const [inAppMode, setInAppMode] = useState<boolean>(true); // Default to SaaS app directly, can toggle to landing
+  const [patientMode, setPatientMode] = useState<boolean>(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authModalMode, setAuthModalMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
@@ -94,10 +96,17 @@ export default function App() {
             setAuthModalMode(mode);
             setShowAuthModal(true);
           }}
+          onOpenPatientPortal={() => {
+            setPatientMode(true);
+            setInAppMode(true);
+          }}
         />
       ) : currentUser?.role === 'SUPER_ADMIN' || currentTab === 'super-admin' ? (
         /* Dedicated Premium Super Admin Platform Layout */
         <SuperAdminLayout onExitSuperAdmin={() => setCurrentTab('dashboard')} />
+      ) : currentUser?.role === 'PATIENT' || patientMode ? (
+        /* Dedicated Premium Patient Portal Layout */
+        <PatientPortalLayout onExitPortal={() => { setPatientMode(false); setCurrentTab('dashboard'); }} />
       ) : (
         /* Authenticated SaaS Professional Workspace */
         <div className="flex h-screen overflow-hidden">

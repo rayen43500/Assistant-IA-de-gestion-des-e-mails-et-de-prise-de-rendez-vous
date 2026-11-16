@@ -272,23 +272,38 @@ export const useAppStore = create<AppStore>((set, get) => ({
       // Mode secours démo si le backend Render est en démarrage à froid
       if (credentials.email && credentials.password) {
         const isSuperAdmin = credentials.email.toLowerCase().includes('admin');
+        const isPatient = credentials.email.toLowerCase().includes('patient') || credentials.email.toLowerCase().includes('jaziri');
         const isLegal = credentials.email.toLowerCase().includes('avocat') || credentials.email.toLowerCase().includes('selim');
         
-        const demoUser: UserProfile = isSuperAdmin ? {
-          id: 'admin-super-1',
-          name: 'Amine Mansour',
-          email: credentials.email,
-          role: 'SUPER_ADMIN',
-          organizationName: 'MediLawAI Platform Inc.',
-          sector: 'MEDICAL'
-        } : {
-          id: `demo-${Date.now()}`,
-          name: isLegal ? 'Me. Selim Trabelsi' : 'Dr. Youssef Ben Salem',
-          email: credentials.email,
-          role: 'PRATICIEN',
-          organizationName: isLegal ? 'Cabinet d’Avocats Trabelsi & Associés' : 'Cabinet Médical Dr. Ben Salem',
-          sector: isLegal ? 'LEGAL' : 'MEDICAL'
-        };
+        let demoUser: UserProfile;
+        if (isSuperAdmin) {
+          demoUser = {
+            id: 'admin-super-1',
+            name: 'Amine Mansour',
+            email: credentials.email,
+            role: 'SUPER_ADMIN',
+            organizationName: 'MediLawAI Platform Inc.',
+            sector: 'MEDICAL'
+          };
+        } else if (isPatient) {
+          demoUser = {
+            id: 'patient-1',
+            name: 'Amine Jaziri',
+            email: credentials.email,
+            role: 'PATIENT',
+            organizationName: 'Espace Patient Amine',
+            sector: 'MEDICAL'
+          };
+        } else {
+          demoUser = {
+            id: `demo-${Date.now()}`,
+            name: isLegal ? 'Me. Selim Trabelsi' : 'Dr. Youssef Ben Salem',
+            email: credentials.email,
+            role: 'PRATICIEN',
+            organizationName: isLegal ? 'Cabinet d’Avocats Trabelsi & Associés' : 'Cabinet Médical Dr. Ben Salem',
+            sector: isLegal ? 'LEGAL' : 'MEDICAL'
+          };
+        }
         localStorage.setItem('medilaw_jwt_token', 'demo_session_token_2026');
         set({
           isAuthenticated: true,

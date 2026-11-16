@@ -49,7 +49,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleQuickDemo = (role: 'DOCTOR' | 'LAWYER' | 'ADMIN') => {
+  const handleQuickDemo = (role: 'DOCTOR' | 'LAWYER' | 'ADMIN' | 'PATIENT') => {
     setMode('LOGIN');
     setErrorMessage(null);
     if (role === 'DOCTOR') {
@@ -58,9 +58,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     } else if (role === 'LAWYER') {
       setLoginEmail('me.trabelsi@avocats-tunis.tn');
       setLoginPassword('Password2026!');
-    } else {
+    } else if (role === 'ADMIN') {
       setLoginEmail('admin@medilaw.ai');
       setLoginPassword('AdminSecurise2026!');
+    } else {
+      setLoginEmail('patient@medilaw.ai');
+      setLoginPassword('Patient2026!');
     }
   };
 
@@ -178,11 +181,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <KeyRound className="w-3.5 h-3.5 text-blue-600" /> Profils de Démonstration Rapide :
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
                   onClick={() => handleQuickDemo('DOCTOR')}
-                  className="px-2.5 py-1.5 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
+                  className="px-2 py-1.5 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
                 >
                   <Stethoscope className="w-3 h-3 text-blue-600 shrink-0" />
                   <span className="truncate">Médecin</span>
@@ -190,7 +193,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleQuickDemo('LAWYER')}
-                  className="px-2.5 py-1.5 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
+                  className="px-2 py-1.5 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
                 >
                   <Scale className="w-3 h-3 text-purple-600 shrink-0" />
                   <span className="truncate">Avocat</span>
@@ -198,10 +201,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleQuickDemo('ADMIN')}
-                  className="px-2.5 py-1.5 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
+                  className="px-2 py-1.5 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
                 >
                   <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
                   <span className="truncate">Admin</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickDemo('PATIENT')}
+                  className="px-2 py-1.5 bg-white hover:bg-blue-100/60 border border-blue-200 rounded-xl text-[11px] font-bold text-slate-800 text-center transition-all flex items-center justify-center gap-1 truncate shadow-xs"
+                >
+                  <User className="w-3 h-3 text-teal-600 shrink-0" />
+                  <span className="truncate">Patient</span>
                 </button>
               </div>
             </div>

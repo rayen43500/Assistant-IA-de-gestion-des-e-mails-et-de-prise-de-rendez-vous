@@ -23,9 +23,10 @@ interface PublicLandingPageProps {
   onEnterApp: () => void;
   onOpenOnboarding: () => void;
   onOpenAuth?: (mode: 'LOGIN' | 'REGISTER') => void;
+  onOpenPatientPortal?: () => void;
 }
 
-export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ onEnterApp, onOpenOnboarding, onOpenAuth }) => {
+export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ onEnterApp, onOpenOnboarding, onOpenAuth, onOpenPatientPortal }) => {
   const [activeTab, setActiveTab] = useState<'ALL' | 'MEDICAL' | 'LEGAL'>('ALL');
   const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'ANNUAL'>('ANNUAL');
 
@@ -53,6 +54,14 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ onEnterApp
           </nav>
 
           <div className="flex items-center gap-3">
+            {onOpenPatientPortal && (
+              <button
+                onClick={onOpenPatientPortal}
+                className="text-xs font-bold text-[#2563EB] bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition-colors border border-blue-200/60 hidden sm:inline-flex items-center gap-1.5"
+              >
+                <span>Portail Patient / RDV</span>
+              </button>
+            )}
             <button
               onClick={() => onOpenAuth ? onOpenAuth('LOGIN') : onEnterApp()}
               className="text-xs font-bold text-slate-700 hover:text-blue-600 px-3.5 py-2 transition-colors"
