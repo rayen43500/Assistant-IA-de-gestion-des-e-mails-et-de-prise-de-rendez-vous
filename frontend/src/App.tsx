@@ -82,7 +82,12 @@ export default function App() {
       {/* Onboarding Wizard Modal */}
       {showOnboarding && (
         <OnboardingWizard
-          onComplete={() => setShowOnboarding(false)}
+          onComplete={() => {
+            setShowOnboarding(false);
+            setInAppMode(true);
+            setPatientMode(false);
+            setCurrentTab('dashboard');
+          }}
           onCancel={() => setShowOnboarding(false)}
         />
       )}

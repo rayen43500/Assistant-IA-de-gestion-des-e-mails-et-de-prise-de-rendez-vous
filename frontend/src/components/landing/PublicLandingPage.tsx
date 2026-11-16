@@ -16,8 +16,14 @@ import {
   ChevronDown,
   Sparkles,
   Lock,
-  MessageSquare
+  MessageSquare,
+  Clock,
+  Phone,
+  Check,
+  Coffee,
+  Globe
 } from 'lucide-react';
+import { useAppStore } from '../../stores/useAppStore';
 
 interface PublicLandingPageProps {
   onEnterApp: () => void;
@@ -26,447 +32,861 @@ interface PublicLandingPageProps {
   onOpenPatientPortal?: () => void;
 }
 
-export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ onEnterApp, onOpenOnboarding, onOpenAuth, onOpenPatientPortal }) => {
-  const [activeTab, setActiveTab] = useState<'ALL' | 'MEDICAL' | 'LEGAL'>('ALL');
-  const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'ANNUAL'>('ANNUAL');
+export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({ 
+  onEnterApp, 
+  onOpenOnboarding, 
+  onOpenAuth, 
+  onOpenPatientPortal 
+}) => {
+  const { setSector } = useAppStore();
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const toggleFaq = (idx: number) => {
+    setOpenFaq(openFaq === idx ? null : idx);
+  };
+
+  const handleSelectMedical = () => {
+    setSector('MEDICAL');
+    onOpenOnboarding();
+  };
+
+  const handleSelectLegal = () => {
+    setSector('LEGAL');
+    onOpenOnboarding();
+  };
 
   return (
-    <div className="min-h-screen bg-[#F7F9FC] text-[#172033] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
-      {/* Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-[#E5EAF2]">
+    <div className="min-h-screen bg-[#F7F9FC] text-[#14213D] flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
+      {/* 01. HEADER */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E8EDF4]">
         <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-              <Bot className="w-6 h-6" />
+          {/* Logo */}
+          <div className="flex items-center gap-3 cursor-pointer" onClick={onEnterApp}>
+            <div className="w-10 h-10 rounded-2xl bg-[#2563EB] flex items-center justify-center text-white shadow-md shadow-blue-600/20">
+              <Bot className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-lg font-black tracking-tight text-[#14213D]">MediLaw<span className="text-blue-600">AI</span></span>
-              <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400">Secrétariat Intelligent 24/7</span>
+              <span className="text-xl font-black tracking-tight text-[#14213D]">
+                MediLaw<span className="text-[#2563EB]">AI</span>
+              </span>
+              <span className="block text-[10px] font-bold text-slate-400 -mt-0.5">
+                Secrétariat Intelligent 24h/24
+              </span>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
-            <a href="#features" className="hover:text-blue-600 transition-colors">Fonctionnalités</a>
-            <a href="#solutions" className="hover:text-blue-600 transition-colors">Solutions Métiers</a>
-            <a href="#automation" className="hover:text-blue-600 transition-colors">Orchestration n8n</a>
-            <a href="#pricing" className="hover:text-blue-600 transition-colors">Tarifs</a>
-            <a href="#faq" className="hover:text-blue-600 transition-colors">FAQ</a>
+          {/* Navigation Principale */}
+          <nav className="hidden lg:flex items-center gap-8 text-xs font-semibold text-slate-600">
+            <a href="#features" className="hover:text-[#2563EB] transition-colors">Fonctionnalités</a>
+            <a href="#solutions" className="hover:text-[#2563EB] transition-colors">Solutions métiers</a>
+            <a href="#how-it-works" className="hover:text-[#2563EB] transition-colors">Comment ça marche</a>
+            <a href="#pricing" className="hover:text-[#2563EB] transition-colors">Tarifs</a>
+            <a href="#faq" className="hover:text-[#2563EB] transition-colors">FAQ</a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          {/* Boutons à droite */}
+          <div className="flex items-center gap-2.5">
             {onOpenPatientPortal && (
               <button
                 onClick={onOpenPatientPortal}
-                className="text-xs font-bold text-[#2563EB] bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition-colors border border-blue-200/60 hidden sm:inline-flex items-center gap-1.5"
+                className="text-xs font-bold text-[#2563EB] bg-blue-50/80 hover:bg-blue-100 px-3.5 py-2 rounded-xl border border-blue-200 transition-colors hidden sm:flex items-center gap-1.5"
               >
-                <span>Portail Patient / RDV</span>
+                <Users className="w-3.5 h-3.5" />
+                <span>Portail Patient</span>
               </button>
             )}
+
             <button
               onClick={() => onOpenAuth ? onOpenAuth('LOGIN') : onEnterApp()}
-              className="text-xs font-bold text-slate-700 hover:text-blue-600 px-3.5 py-2 transition-colors"
+              className="text-xs font-bold text-slate-700 hover:text-[#2563EB] px-3.5 py-2 rounded-xl transition-colors"
             >
-              Connexion Espace Pro
+              Connexion Professionnel
             </button>
+
             <button
-              onClick={() => onOpenAuth ? onOpenAuth('REGISTER') : onOpenOnboarding()}
-              className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5"
+              onClick={onOpenOnboarding}
+              className="text-xs font-bold text-white bg-[#2563EB] hover:bg-blue-700 active:scale-[0.98] px-4 py-2.5 rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5"
             >
-              <span>Créer Mon Cabinet</span>
+              <span>Créer mon cabinet</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="pt-20 pb-16 px-6 relative overflow-hidden">
-        <div className="max-w-6xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-xs font-bold shadow-xs">
-            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            <span>Plateforme SaaS Dédiée aux Cabinets Médicaux & Juridiques</span>
+      {/* 02. HERO SECTION */}
+      <section className="pt-16 pb-16 px-6 relative overflow-hidden bg-gradient-to-b from-white via-[#F7F9FC] to-[#F7F9FC]">
+        <div className="max-w-5xl mx-auto text-center space-y-6">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200/80 text-[#2563EB] text-[11px] font-bold tracking-wide uppercase shadow-2xs">
+            <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+            <span>AI-POWERED MEDICAL & LEGAL SECRETARIAT</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#14213D] tracking-tight max-w-4xl mx-auto leading-tight">
-            Votre secrétariat intelligent, disponible <span className="text-blue-600">24h/24</span> grâce à l'IA.
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-[#14213D] tracking-tight leading-[1.12]">
+            Votre secrétariat. Plus intelligent. <br />
+            <span className="text-[#2563EB]">Disponible 24h/24.</span>
           </h1>
 
-          <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            Automatisez le tri de vos e-mails entrants, la confirmation des rendez-vous sans double réservation et les rappels WhatsApp avec les garanties de sécurité Human-in-the-Loop.
+          <p className="text-base sm:text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
+            MediLawAI automatise la gestion de vos e-mails, simplifie la prise de rendez-vous et accompagne votre secrétariat grâce à l'intelligence artificielle.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
+          <p className="text-sm font-semibold text-slate-700">
+            Concentrez-vous sur votre métier. Nous simplifions votre gestion quotidienne.
+          </p>
+
+          {/* Boutons CTA */}
+          <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
             <button
               onClick={onOpenOnboarding}
-              className="px-6 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-600/25 transition-all flex items-center gap-2"
+              className="px-6 py-3.5 bg-[#2563EB] hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/25 transition-all flex items-center gap-2"
             >
-              <span>Démarrer la configuration du cabinet</span>
+              <span>Créer mon cabinet</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+
             <button
               onClick={onEnterApp}
-              className="px-6 py-3.5 rounded-xl bg-white border border-[#E5EAF2] hover:bg-slate-50 text-slate-800 font-bold text-sm shadow-xs transition-all flex items-center gap-2"
+              className="px-6 py-3.5 bg-white hover:bg-slate-50 border border-[#E8EDF4] text-[#14213D] rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
             >
-              <Zap className="w-4 h-4 text-blue-600" />
-              <span>Explorer la démo en direct</span>
+              <span>Découvrir la plateforme</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
             </button>
           </div>
 
-          {/* Social Proof Badges */}
-          <div className="pt-8 flex flex-wrap items-center justify-center gap-8 text-xs font-medium text-slate-500">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Conformité RGPD & Secret Médical</span>
+          {/* Éléments de confiance */}
+          <div className="pt-8 border-t border-slate-200/60 max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-4 text-left">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="text-xs text-slate-600 leading-snug">Validation humaine des réponses sensibles</span>
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Validation Humaine en 1 clic</span>
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="text-xs text-slate-600 leading-snug">Synchronisation Google Calendar</span>
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Intégration Google Calendar & Gmail</span>
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="text-xs text-slate-600 leading-snug">Automatisation WhatsApp 24h</span>
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Moteur d'Orchestration n8n Inclus</span>
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="text-xs text-slate-600 leading-snug">Protection des données et contrôle des accès</span>
             </div>
           </div>
         </div>
 
-        {/* Dashboard Preview Frame matching screenshot 1 */}
-        <div className="max-w-6xl mx-auto mt-14 bg-white p-3 rounded-2xl shadow-2xl border border-[#E5EAF2]">
-          <div className="bg-[#14213D] text-white p-3 rounded-xl flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-              <span className="font-bold">Aperçu Espace Praticien — Cabinet Médical Pilote</span>
-            </div>
-            <span className="text-slate-300 font-mono text-[11px]">Précision NLP : 94.2% • Temps de réponse : ~25ms</span>
-          </div>
-          <div className="p-6 bg-[#F7F9FC] rounded-b-xl grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
-            {[
-              { label: 'E-mails Reçus & Classés', val: '142', sub: '+12.5% vs semaine dernière', color: 'text-blue-600' },
-              { label: 'RDV Confirmés Aujourd’hui', val: '18', sub: '100% sans collision', color: 'text-emerald-600' },
-              { label: 'Urgences SAMU Détectées', val: '3', sub: 'Escalade immédiate 190', color: 'text-rose-600' },
-              { label: 'Temps Économisé / Semaine', val: '16.5 h', sub: 'Secrétariat automatisé', color: 'text-purple-600' }
-            ].map((kpi, idx) => (
-              <div key={idx} className="p-4 bg-white rounded-xl border border-[#E5EAF2] shadow-xs">
-                <span className="text-xs text-slate-500 font-medium">{kpi.label}</span>
-                <div className={`text-2xl font-black mt-1 ${kpi.color}`}>{kpi.val}</div>
-                <span className="text-[10px] text-slate-400 mt-1 block">{kpi.sub}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features Grid */}
-      <section id="features" className="py-16 px-6 bg-white border-t border-[#E5EAF2]">
-        <div className="max-w-6xl mx-auto space-y-12">
-          <div className="text-center space-y-3 max-w-2xl mx-auto">
-            <h2 className="text-3xl font-extrabold text-[#14213D]">Fonctionnalités Conçues pour l’Excellence</h2>
-            <p className="text-sm text-slate-600">Une suite tout-en-un alliant intelligence artificielle générative certifiée et automatisation no-code.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              {
-                icon: Mail,
-                title: 'Tri & Réponse E-mail par IA',
-                desc: 'Classification NLP automatique (>94% F1-score) en 5 catégories : Demande de RDV, Tarifs, Administratif, Urgence et Spam.',
-                tag: 'Deep Learning'
-              },
-              {
-                icon: Calendar,
-                title: 'Agenda & Anti-Double Réservation',
-                desc: 'Index d’unicité au niveau de la base et synchronisation continue avec Google Calendar et Outlook pour éliminer les conflits.',
-                tag: 'Zéro Collision'
-              },
-              {
-                icon: MessageSquare,
-                title: 'Rappels WhatsApp 24h Avant',
-                desc: 'Envoi automatique de messages personnalisés aux patients/clients la veille de leur consultation pour réduire l’absentéisme de 70%.',
-                tag: 'WhatsApp API'
-              },
-              {
-                icon: ShieldCheck,
-                title: 'Garde-fous Human-in-the-Loop',
-                desc: 'Toute réponse sensible ou acte médical/juridique est préalablement soumis à la relecture en 1 clic de votre secrétariat.',
-                tag: 'Sécurité Maximale'
-              },
-              {
-                icon: Zap,
-                title: 'Orchestration n8n Native',
-                desc: '4 workflows de production préconfigurés pour automatiser Gmail, Calendar, Twilio et l’escalade SAMU 190 en arrière-plan.',
-                tag: 'Workflows Actifs'
-              },
-              {
-                icon: Bot,
-                title: 'Moteur RAG sans Hallucination',
-                desc: 'L’agent conversationnel répond exclusivement à partir des fiches tarifaires, horaires et documents certifiés de votre structure.',
-                tag: 'Base Certifiée'
-              }
-            ].map((f, i) => {
-              const Icon = f.icon;
-              return (
-                <div key={i} className="p-6 rounded-2xl border border-[#E5EAF2] bg-[#F7F9FC] hover:bg-white hover:shadow-md transition-all space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <span className="text-[10px] font-bold text-blue-600 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200/50">{f.tag}</span>
-                  </div>
-                  <h3 className="font-bold text-slate-900 text-base">{f.title}</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">{f.desc}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Solutions Medical vs Legal Section */}
-      <section id="solutions" className="py-16 px-6 bg-[#F7F9FC] border-t border-[#E5EAF2]">
-        <div className="max-w-6xl mx-auto space-y-10">
-          <div className="text-center space-y-3 max-w-2xl mx-auto">
-            <h2 className="text-3xl font-extrabold text-[#14213D]">Adapté à Votre Profession</h2>
-            <p className="text-sm text-slate-600">Choisissez votre univers pour découvrir comment MediLawAI transforme votre quotidien.</p>
-            
-            <div className="inline-flex p-1 bg-white rounded-xl border border-slate-200 mt-2">
-              <button
-                onClick={() => setActiveTab('MEDICAL')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                  activeTab === 'MEDICAL' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Stethoscope className="w-4 h-4" />
-                <span>Cabinets Médicaux & Dentaires</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('LEGAL')}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
-                  activeTab === 'LEGAL' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Scale className="w-4 h-4" />
-                <span>Cabinets d'Avocats & Juristes</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-[#E5EAF2] p-8 shadow-sm">
-            {activeTab !== 'LEGAL' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                <div className="space-y-4">
-                  <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Secteur Médical & Santé</span>
-                  <h3 className="text-2xl font-bold text-[#14213D]">Protection Vitale & Sérénité pour Votre Cabinet</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    Conçu pour les cardiologues, généralistes, dentistes et spécialistes. Détecte immédiatement les mots-clés d'urgence vitale pour diriger les patients vers le SAMU Tunisie (190 / 198) tout en alertant le médecin par SMS.
-                  </p>
-                  <ul className="space-y-2.5 text-xs text-slate-700 font-medium">
-                    <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Prise en compte des tarifs et conventions CNAM (feuille de soins).</li>
-                    <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Rappels WhatsApp 24h avant la consultation cardiologique ou dentaire.</li>
-                    <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Aucun avis médical généré sans la signature du médecin.</li>
-                  </ul>
-                  <button onClick={onOpenOnboarding} className="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition-all">
-                    Activer le Mode Médical
-                  </button>
-                </div>
-                <div className="bg-[#F7F9FC] p-6 rounded-xl border border-[#E5EAF2] space-y-3 font-mono text-xs text-slate-700">
-                  <div className="font-bold text-blue-600 border-b pb-2">Exemple de Flux Réel Médical</div>
-                  <div className="p-2.5 bg-white rounded border">
-                    <span className="text-slate-400">Patient :</span> "Bonjour Docteur, palpitations depuis ce matin, dispo jeudi 10h ?"
-                  </div>
-                  <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded">
-                    <span className="text-blue-700 font-bold">Réponse IA Prête :</span> "Bonjour, le créneau de jeudi 10h00 est réservable pour votre consultation ECG."
-                  </div>
-                  <div className="text-[11px] text-emerald-600 flex items-center gap-1.5 font-sans font-semibold">
-                    <CheckCircle2 className="w-4 h-4" /> Validé en 1 clic par Sarra (Secrétariat)
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                <div className="space-y-4">
-                  <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Secteur Juridique & Avocats</span>
-                  <h3 className="text-2xl font-bold text-[#14213D]">Gestion Déontologique des Consultations & Dossiers</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    Spécifiquement paramétré pour les cabinets d'avocats et cabinets de conseil. Catégorise les e-mails par type de contentieux, demande d'actes juridiques, honoraires et préparation d'audiences.
-                  </p>
-                  <ul className="space-y-2.5 text-xs text-slate-700 font-medium">
-                    <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Secret professionnel strict et anonymisation préalable.</li>
-                    <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Synchronisation du calendrier des audiences et rendez-vous clients.</li>
-                    <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> RAG indexé sur vos conditions d'honoraires et domaines de spécialité.</li>
-                  </ul>
-                  <button onClick={onOpenOnboarding} className="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-xs hover:bg-indigo-700 transition-all">
-                    Activer le Mode Juridique
-                  </button>
-                </div>
-                <div className="bg-[#F7F9FC] p-6 rounded-xl border border-[#E5EAF2] space-y-3 font-mono text-xs text-slate-700">
-                  <div className="font-bold text-indigo-600 border-b pb-2">Exemple de Flux Juridique</div>
-                  <div className="p-2.5 bg-white rounded border">
-                    <span className="text-slate-400">Client :</span> "Maître, nous souhaitons planifier un échange pour les statuts de notre filiale."
-                  </div>
-                  <div className="p-2.5 bg-indigo-50/70 border border-indigo-200 rounded">
-                    <span className="text-indigo-700 font-bold">Réponse IA Prête :</span> "Maître Trabelsi vous reçoit vendredi à 14h30 au cabinet d'affaires."
-                  </div>
-                  <div className="text-[11px] text-emerald-600 flex items-center gap-1.5 font-sans font-semibold">
-                    <CheckCircle2 className="w-4 h-4" /> Notification d'agenda synchronisée sur Google Calendar
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section id="pricing" className="py-16 px-6 bg-white border-t border-[#E5EAF2]">
-        <div className="max-w-6xl mx-auto space-y-12">
-          <div className="text-center space-y-3 max-w-xl mx-auto">
-            <h2 className="text-3xl font-extrabold text-[#14213D]">Tarification Transparente & Sans Engagement</h2>
-            <p className="text-sm text-slate-600">Choisissez la formule adaptée à la taille de votre cabinet.</p>
-
-            <div className="inline-flex items-center gap-3 p-1 bg-slate-100 rounded-xl mt-4">
-              <button
-                onClick={() => setBillingCycle('MONTHLY')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  billingCycle === 'MONTHLY' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500'
-                }`}
-              >
-                Mensuel
-              </button>
-              <button
-                onClick={() => setBillingCycle('ANNUAL')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  billingCycle === 'ANNUAL' ? 'bg-white shadow-xs text-blue-600' : 'text-slate-500'
-                }`}
-              >
-                Annuel (-20% de remise)
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              {
-                name: 'Starter',
-                desc: 'Idéal pour praticien individuel ou avocat indépendant.',
-                price: billingCycle === 'ANNUAL' ? '89 TND' : '110 TND',
-                features: ['1 boîte e-mail connectée (Gmail)', 'Jusqu’à 500 e-mails/mois classés par l’IA', 'Prise de RDV sans collision', 'Rappels WhatsApp 24h basiques', 'Support par e-mail sous 24h'],
-                cta: 'Commencer en Starter',
-                popular: false
-              },
-              {
-                name: 'Professionnel',
-                desc: 'Pour cabinets médicaux et études d’avocats en forte activité.',
-                price: billingCycle === 'ANNUAL' ? '189 TND' : '230 TND',
-                features: ['Boîtes illimitées + Google Calendar', 'E-mails IA illimités avec RAG certifié', 'Escalade d’Urgence SMS / SAMU 190', '4 workflows n8n inclus & modifiables', 'Multi-utilisateurs (Médecin + Secrétaire)', 'Support prioritaire 7j/7'],
-                cta: 'Choisir l’Offre Pro',
-                popular: true
-              },
-              {
-                name: 'Clinique & Entreprise',
-                desc: 'Pour cliniques polyvalentes et cabinets d’avocats associés.',
-                price: 'Sur Devis',
-                features: ['Multi-praticiens & Multi-sites', 'Hébergement dédié / On-premise disponible', 'Modèles Deep Learning fine-tunés sur mesure', 'Accès API & webhooks illimités', 'Responsable de compte dédié'],
-                cta: 'Contacter notre équipe',
-                popular: false
-              }
-            ].map((plan, idx) => (
-              <div 
-                key={idx}
-                className={`p-6 rounded-2xl border transition-all flex flex-col justify-between ${
-                  plan.popular 
-                    ? 'border-blue-600 bg-white shadow-xl ring-2 ring-blue-500/20 relative' 
-                    : 'border-[#E5EAF2] bg-[#F7F9FC]'
-                }`}
-              >
-                {plan.popular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] uppercase font-black px-3 py-1 rounded-full tracking-wider shadow-sm">
-                    Recommandé
-                  </span>
-                )}
-                <div>
-                  <h3 className="font-bold text-slate-900 text-lg">{plan.name}</h3>
-                  <p className="text-xs text-slate-500 mt-1">{plan.desc}</p>
-                  
-                  <div className="my-6">
-                    <span className="text-3xl font-black text-[#14213D]">{plan.price}</span>
-                    {plan.price !== 'Sur Devis' && <span className="text-xs text-slate-500 ml-1">/ mois</span>}
-                  </div>
-
-                  <ul className="space-y-2.5 text-xs text-slate-700">
-                    {plan.features.map((feat, fIdx) => (
-                      <li key={fIdx} className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <button
-                  onClick={onOpenOnboarding}
-                  className={`mt-8 w-full py-2.5 rounded-xl font-bold text-xs transition-all ${
-                    plan.popular
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20'
-                      : 'bg-white border border-slate-300 text-slate-800 hover:bg-slate-50'
-                  }`}
-                >
-                  {plan.cta}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="mt-auto bg-[#14213D] text-slate-400 text-xs py-12 px-6 border-t border-slate-800">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div className="space-y-3">
-            <span className="text-lg font-black text-white">MediLaw<span className="text-blue-500">AI</span></span>
-            <p className="text-xs leading-relaxed text-slate-400">
-              Plateforme d'intelligence artificielle et d'automatisation pour les professions de santé et du droit.
+        {/* APERÇU DE LA PLATEFORME (Véritable Dashboard) */}
+        <div className="max-w-6xl mx-auto mt-14">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-black text-[#14213D] tracking-tight">
+              Tout votre secrétariat dans une seule interface.
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Vue synthétique du véritable espace de travail médical et de secrétariat
             </p>
           </div>
 
-          <div>
-            <h4 className="text-white font-bold mb-3 text-xs uppercase tracking-wider">Produit</h4>
-            <ul className="space-y-2">
-              <li><a href="#features" className="hover:text-white">Tri des e-mails IA</a></li>
-              <li><a href="#features" className="hover:text-white">Gestion de calendrier</a></li>
-              <li><a href="#automation" className="hover:text-white">Orchestration n8n</a></li>
-              <li><a href="#pricing" className="hover:text-white">Grille tarifaire</a></li>
+          <div className="bg-white rounded-3xl border border-[#E8EDF4] shadow-xl shadow-slate-200/50 p-6 space-y-6">
+            {/* Top metrics bar */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4]">
+                <div className="text-[11px] font-semibold text-slate-500">Rendez-vous du jour</div>
+                <div className="text-xl font-black text-[#14213D] mt-1">6 consultations</div>
+                <div className="text-[10px] text-emerald-600 font-bold mt-1">✓ Google Calendar synchronisé</div>
+              </div>
+
+              <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4]">
+                <div className="text-[11px] font-semibold text-slate-500">Nouveaux e-mails</div>
+                <div className="text-xl font-black text-[#14213D] mt-1">3 reçus</div>
+                <div className="text-[10px] text-blue-600 font-bold mt-1">Classification NLP active</div>
+              </div>
+
+              <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4]">
+                <div className="text-[11px] font-semibold text-slate-500">Demandes en attente</div>
+                <div className="text-xl font-black text-[#14213D] mt-1">2 à valider</div>
+                <div className="text-[10px] text-amber-600 font-bold mt-1">Supervision humaine requise</div>
+              </div>
+
+              <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4]">
+                <div className="text-[11px] font-semibold text-slate-500">Disponibilités & Pauses</div>
+                <div className="text-xl font-black text-[#14213D] mt-1">08:30 - 17:30</div>
+                <div className="text-[10px] text-slate-600 font-semibold mt-1">Pause Déjeuner 12:30 - 14:00</div>
+              </div>
+            </div>
+
+            {/* Simulated Live Workspace modules */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2 text-xs">
+              {/* Module 1: Prochains Rendez-vous */}
+              <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4] space-y-3">
+                <div className="flex items-center justify-between font-bold text-slate-800">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-[#2563EB]" /> Planning du Jour
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">Mardi 03 Nov</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex justify-between items-center">
+                    <div>
+                      <div className="font-bold text-slate-800">Amine Jaziri</div>
+                      <div className="text-[10px] text-slate-500">Cardiologie & ECG</div>
+                    </div>
+                    <span className="font-mono font-bold text-blue-600 text-[11px]">10:00</span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-xl border border-slate-200 flex justify-between items-center">
+                    <div>
+                      <div className="font-bold text-slate-800">Karim Bouazizi</div>
+                      <div className="text-[10px] text-slate-500">Suivi tensionnel</div>
+                    </div>
+                    <span className="font-mono font-bold text-blue-600 text-[11px]">11:30</span>
+                  </div>
+
+                  <div className="p-2 bg-amber-50 rounded-xl border border-amber-200/80 text-amber-900 flex items-center justify-center gap-1.5 text-[11px] font-semibold">
+                    <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                    <span>12:30 - 14:00 • Pause Déjeuner Protégée</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Module 2: E-mails IA en attente */}
+              <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4] space-y-3">
+                <div className="flex items-center justify-between font-bold text-slate-800">
+                  <span className="flex items-center gap-1.5">
+                    <Mail className="w-4 h-4 text-[#2563EB]" /> Gestion E-mails IA
+                  </span>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold">Brouillons prêts</span>
+                </div>
+
+                <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="font-bold text-slate-800">Sami Chaabane</div>
+                  <div className="text-[11px] text-slate-600">« Demande de certificat médical pour sport »</div>
+                  <div className="p-2 bg-blue-50/60 rounded-lg text-[10px] text-blue-900 italic border border-blue-100">
+                    IA : « Réponse préparée selon le modèle légal du cabinet, en attente de signature... »
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="font-bold text-slate-800">Mona Karray</div>
+                  <div className="text-[11px] text-slate-600">« Douleur thoracique ce matin »</div>
+                  <span className="inline-block text-[9px] font-bold bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full border border-rose-200">
+                    Alerte SAMU 190 générée
+                  </span>
+                </div>
+              </div>
+
+              {/* Module 3: Assistant IA & Notifications */}
+              <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4] space-y-3">
+                <div className="flex items-center justify-between font-bold text-slate-800">
+                  <span className="flex items-center gap-1.5">
+                    <Bot className="w-4 h-4 text-[#2563EB]" /> Copilote Cabinet IA
+                  </span>
+                  <span className="text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full font-bold">Actif 24/7</span>
+                </div>
+
+                <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 space-y-1.5">
+                  <div className="text-[11px] font-bold text-purple-900">Synthèse du Secrétariat</div>
+                  <p className="text-[10px] text-purple-800 leading-relaxed">
+                    2 rappels WhatsApp ont été expédiés ce matin à 08h00. Vos créneaux de jeudi après-midi sont synchronisés avec Google Calendar.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] pt-1">
+                  <span className="text-slate-500">Protection Anti-Double Réservation</span>
+                  <span className="font-bold text-emerald-600">Vérifiée</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 03. FONCTIONNALITÉS */}
+      <section id="features" className="py-20 px-6 bg-white border-t border-[#E8EDF4]">
+        <div className="max-w-6xl mx-auto space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">Fonctionnalités</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#14213D] tracking-tight">
+              Un secrétariat intelligent qui travaille avec vous.
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+              Une automatisation fine conçue pour respecter les usages professionnels, sans jamais vous déposséder du contrôle.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* 01 */}
+            <div className="p-6 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-3 hover:border-blue-300 transition-colors">
+              <span className="text-xs font-mono font-bold text-[#2563EB]">01</span>
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold">
+                <Mail className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-[#14213D]">Gestion intelligente des e-mails</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                L'IA analyse, classe et prépare les réponses aux demandes reçues selon vos modèles certifiés.
+              </p>
+            </div>
+
+            {/* 02 */}
+            <div className="p-6 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-3 hover:border-blue-300 transition-colors">
+              <span className="text-xs font-mono font-bold text-[#2563EB]">02</span>
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-[#14213D]">Gestion des rendez-vous</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Consultez les disponibilités, gérez votre calendrier et évitez les doubles réservations en direct.
+              </p>
+            </div>
+
+            {/* 03 */}
+            <div className="p-6 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-3 hover:border-blue-300 transition-colors">
+              <span className="text-xs font-mono font-bold text-[#2563EB]">03</span>
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold">
+                <Globe className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-[#14213D]">Réservation en ligne</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Permettez à vos patients ou clients de consulter les créneaux disponibles et de réserver facilement.
+              </p>
+            </div>
+
+            {/* 04 */}
+            <div className="p-6 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-3 hover:border-blue-300 transition-colors">
+              <span className="text-xs font-mono font-bold text-[#2563EB]">04</span>
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-[#14213D]">Rappels automatiques</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Envoyez des rappels personnalisés par WhatsApp avant les rendez-vous pour réduire le taux d'absentéisme.
+              </p>
+            </div>
+
+            {/* 05 */}
+            <div className="p-6 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-3 hover:border-blue-300 transition-colors">
+              <span className="text-xs font-mono font-bold text-[#2563EB]">05</span>
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold">
+                <Bot className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-[#14213D]">Assistant IA</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Accédez rapidement aux informations de votre cabinet grâce à un assistant connecté à vos documents.
+              </p>
+            </div>
+
+            {/* 06 */}
+            <div className="p-6 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-3 hover:border-blue-300 transition-colors">
+              <span className="text-xs font-mono font-bold text-[#2563EB]">06</span>
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-[#14213D]">Validation humaine</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Gardez le contrôle : les réponses sensibles nécessitent une validation professionnelle avant leur envoi.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 04. SOLUTIONS MÉTIERS */}
+      <section id="solutions" className="py-20 px-6 bg-[#F7F9FC] border-t border-[#E8EDF4]">
+        <div className="max-w-6xl mx-auto space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">Solutions Métiers</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#14213D] tracking-tight">
+              Une solution adaptée à votre profession.
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Deux environnements spécialisés pour répondre aux exigences déontologiques de chaque pratique.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Carte Médicale */}
+            <div className="bg-white rounded-3xl border border-[#E8EDF4] p-8 space-y-6 shadow-xs flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-[#2563EB] flex items-center justify-center font-bold">
+                  <Stethoscope className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-[#14213D]">Cabinets Médicaux & Dentaires</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Simplifiez la gestion de votre cabinet et améliorez l'expérience de vos patients.
+                  </p>
+                </div>
+
+                <div className="space-y-2.5 pt-2">
+                  {[
+                    "Gestion des patients.",
+                    "Réservation médicale en ligne.",
+                    "Gestion des disponibilités.",
+                    "Rappels de consultation.",
+                    "Gestion des e-mails.",
+                    "Assistant IA administratif."
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-2.5 text-xs text-slate-700 font-medium">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={handleSelectMedical}
+                className="w-full py-3 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2"
+              >
+                <span>Découvrir la solution médicale</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Carte Juridique */}
+            <div className="bg-white rounded-3xl border border-[#E8EDF4] p-8 space-y-6 shadow-xs flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                  <Scale className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-[#14213D]">Cabinets Juridiques & Avocats</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Optimisez la gestion administrative et les communications avec vos clients.
+                  </p>
+                </div>
+
+                <div className="space-y-2.5 pt-2">
+                  {[
+                    "Gestion des demandes clients.",
+                    "Prise de rendez-vous.",
+                    "Gestion des consultations.",
+                    "Rappels automatiques.",
+                    "Gestion des e-mails.",
+                    "Assistant documentaire juridique."
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-2.5 text-xs text-slate-700 font-medium">
+                      <Check className="w-4 h-4 text-purple-600 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={handleSelectLegal}
+                className="w-full py-3 bg-[#14213D] hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2"
+              >
+                <span>Découvrir la solution juridique</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 05. COMMENT ÇA MARCHE ? */}
+      <section id="how-it-works" className="py-20 px-6 bg-white border-t border-[#E8EDF4]">
+        <div className="max-w-6xl mx-auto space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">Parcours Simple</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#14213D] tracking-tight">
+              Votre cabinet opérationnel en quelques étapes.
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Une mise en route guidée en 5 étapes simples, sans compétences techniques requises.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {[
+              { num: '01', title: 'Créez votre espace professionnel', desc: 'Inscription rapide et sélection de votre spécialité.' },
+              { num: '02', title: 'Configurez vos informations', desc: 'Définissez vos horaires d’ouverture et pauses déjeuner.' },
+              { num: '03', title: 'Connectez vos outils', desc: 'Gmail, Google Calendar et WhatsApp en un clic.' },
+              { num: '04', title: 'Laissez l’IA organiser', desc: 'Tri automatique des demandes et brouillons rédigés.' },
+              { num: '05', title: 'Validez et pilotez', desc: 'Approuvez les réponses et gérez votre planning.' }
+            ].map((step, idx) => (
+              <div key={idx} className="p-5 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-2">
+                <span className="text-xs font-mono font-black text-[#2563EB]">{step.num}</span>
+                <h3 className="font-bold text-xs text-[#14213D]">{step.title}</h3>
+                <p className="text-[11px] text-slate-500 leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 06. AUTOMATISATION & INTELLIGENCE ARTIFICIELLE */}
+      <section className="py-20 px-6 bg-[#F7F9FC] border-t border-[#E8EDF4]">
+        <div className="max-w-6xl mx-auto space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">Écosystème Connecté</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#14213D] tracking-tight">
+              Toutes vos tâches connectées dans un seul écosystème.
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Une synergie fluide entre vos outils quotidiens et les moteurs d'intelligence artificielle.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-center">
+            <div className="p-5 bg-white rounded-2xl border border-[#E8EDF4] shadow-2xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+                <Mail className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-xs text-[#14213D]">Gmail</h3>
+              <p className="text-[11px] text-slate-500">Réception et traitement sécurisé des e-mails</p>
+            </div>
+
+            <div className="p-5 bg-white rounded-2xl border border-[#E8EDF4] shadow-2xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center mx-auto">
+                <Bot className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-xs text-[#14213D]">Intelligence Artificielle</h3>
+              <p className="text-[11px] text-slate-500">Classification NLP & génération de réponses</p>
+            </div>
+
+            <div className="p-5 bg-white rounded-2xl border border-[#E8EDF4] shadow-2xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#2563EB] flex items-center justify-center mx-auto">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-xs text-[#14213D]">Google Calendar</h3>
+              <p className="text-[11px] text-slate-500">Synchronisation des rendez-vous en direct</p>
+            </div>
+
+            <div className="p-5 bg-white rounded-2xl border border-[#E8EDF4] shadow-2xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-xs text-[#14213D]">WhatsApp</h3>
+              <p className="text-[11px] text-slate-500">Rappels de RDV automatiques avant 24h</p>
+            </div>
+
+            <div className="p-5 bg-white rounded-2xl border border-[#E8EDF4] shadow-2xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto">
+                <Zap className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-xs text-[#14213D]">n8n Workflows</h3>
+              <p className="text-[11px] text-slate-500">Orchestration des flux automatisés</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 07. SÉCURITÉ & CONFIDENTIALITÉ */}
+      <section className="py-20 px-6 bg-white border-t border-[#E8EDF4]">
+        <div className="max-w-6xl mx-auto space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">Sécurité</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#14213D] tracking-tight">
+              Votre confiance est notre priorité.
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Des fondations techniques rigoureuses pour préserver le secret professionnel et l'intégrité de vos dossiers.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="p-5 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-bold text-xs text-[#14213D]">Contrôle des accès par rôle</h3>
+              <p className="text-[11px] text-slate-500">Séparation stricte des privilèges praticien, secrétariat et administrateur.</p>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-2">
+              <Lock className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-bold text-xs text-[#14213D]">Protection des informations sensibles</h3>
+              <p className="text-[11px] text-slate-500">Chiffrement AES-256 au repos et protocoles TLS 1.3 en transit.</p>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-2">
+              <Clock className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-bold text-xs text-[#14213D]">Journalisation des actions</h3>
+              <p className="text-[11px] text-slate-500">Traçabilité complète de chaque validation et modification de dossier.</p>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-bold text-xs text-[#14213D]">Validation humaine des réponses sensibles</h3>
+              <p className="text-[11px] text-slate-500">Supervision humaine obligatoire avant tout envoi médical ou juridique officiel.</p>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-2">
+              <Zap className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-bold text-xs text-[#14213D]">Sauvegardes et supervision</h3>
+              <p className="text-[11px] text-slate-500">Snapshots automatisés réguliers et monitoring de disponibilité en temps réel.</p>
+            </div>
+
+            <div className="p-5 rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] space-y-2">
+              <Building2 className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-bold text-xs text-[#14213D]">Isolation des données des cabinets</h3>
+              <p className="text-[11px] text-slate-500">Architecture multi-tenant avec cloisonnement étanche entre structures.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 08. TARIFICATION */}
+      <section id="pricing" className="py-20 px-6 bg-[#F7F9FC] border-t border-[#E8EDF4]">
+        <div className="max-w-6xl mx-auto space-y-12">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">Tarification Transparente</span>
+            <h2 className="text-3xl sm:text-4xl font-black text-[#14213D] tracking-tight">
+              Une formule adaptée à votre cabinet.
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Des tarifs clairs en Dinars Tunisiens (TND), sans frais d’installation cachés.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Starter */}
+            <div className="bg-white rounded-3xl border border-[#E8EDF4] p-8 space-y-6 shadow-xs flex flex-col justify-between">
+              <div className="space-y-4">
+                <span className="text-xs font-bold text-slate-500 uppercase">Starter</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-[#14213D]">89 TND</span>
+                  <span className="text-xs text-slate-500">/ mois</span>
+                </div>
+                <p className="text-xs text-slate-500">Pour les professionnels indépendants.</p>
+
+                <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs text-slate-700">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>1 praticien titulaire</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Jusqu’à 300 e-mails traités / mois</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Synchronisation Google Calendar</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Réservation en ligne pour les patients</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={onOpenOnboarding}
+                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors"
+              >
+                Choisir Starter
+              </button>
+            </div>
+
+            {/* Professionnel */}
+            <div className="bg-white rounded-3xl border-2 border-[#2563EB] p-8 space-y-6 shadow-md shadow-blue-600/10 flex flex-col justify-between relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#2563EB] text-white px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">
+                Recommandé
+              </div>
+
+              <div className="space-y-4">
+                <span className="text-xs font-bold text-[#2563EB] uppercase">Professionnel</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-[#14213D]">189 TND</span>
+                  <span className="text-xs text-slate-500">/ mois</span>
+                </div>
+                <p className="text-xs text-slate-500">Pour les cabinets qui souhaitent automatiser leur secrétariat.</p>
+
+                <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs text-slate-700">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#2563EB] shrink-0" />
+                    <span>Jusqu’à 3 praticiens + accès secrétariat</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#2563EB] shrink-0" />
+                    <span>Tri e-mails & classification NLP illimités</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#2563EB] shrink-0" />
+                    <span>Rappels automatiques WhatsApp 24h</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#2563EB] shrink-0" />
+                    <span>Copilote IA connecté à vos documents</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-[#2563EB] shrink-0" />
+                    <span>Gestion des pauses & congés avancée</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={onOpenOnboarding}
+                className="w-full py-3 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors"
+              >
+                Choisir Professionnel
+              </button>
+            </div>
+
+            {/* Entreprise */}
+            <div className="bg-white rounded-3xl border border-[#E8EDF4] p-8 space-y-6 shadow-xs flex flex-col justify-between">
+              <div className="space-y-4">
+                <span className="text-xs font-bold text-slate-500 uppercase">Entreprise</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-[#14213D]">Sur devis</span>
+                </div>
+                <p className="text-xs text-slate-500">Pour les structures multi-praticiens et multi-sites.</p>
+
+                <div className="space-y-2.5 pt-4 border-t border-slate-100 text-xs text-slate-700">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Nombre illimité de praticiens & sites</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Accompagnement et formation de l'équipe</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Serveur dédié / Hébergement sur-mesure</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Support prioritaire dédié 7j/7</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => window.location.href = 'mailto:contact@medilawai.tn?subject=Demande Devis Entreprise'}
+                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors"
+              >
+                Contacter l'équipe
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 09. FAQ (8 Questions exactes) */}
+      <section id="faq" className="py-20 px-6 bg-white border-t border-[#E8EDF4]">
+        <div className="max-w-4xl mx-auto space-y-12">
+          <div className="text-center space-y-3">
+            <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">FAQ</span>
+            <h2 className="text-3xl font-black text-[#14213D] tracking-tight">Questions Fréquentes</h2>
+            <p className="text-xs sm:text-sm text-slate-500">Tout ce que vous devez savoir pour démarrer sereinement.</p>
+          </div>
+
+          <div className="space-y-3">
+            {[
+              {
+                q: "Comment fonctionne MediLawAI ?",
+                a: "MediLawAI se connecte de façon sécurisée à vos e-mails professionnels et à votre agenda Google Calendar. Notre modèle d'IA analyse les demandes entrantes, prépare des brouillons de réponses adaptés et permet la réservation directe de créneaux en évitant tout double rendez-vous."
+              },
+              {
+                q: "Est-ce que je peux connecter mon Gmail ?",
+                a: "Oui, la synchronisation avec Gmail s'effectue via des protocoles officiels OAuth2 sécurisés. Vous pouvez à tout moment activer ou suspendre l'accès depuis vos paramètres."
+              },
+              {
+                q: "Comment fonctionne la réservation en ligne ?",
+                a: "Vos patients ou clients accèdent à votre portail dédié pour visualiser les créneaux réellement disponibles selon vos horaires de travail et votre pause déjeuner. Une fois le créneau réservé, il s'inscrit immédiatement dans votre Google Calendar."
+              },
+              {
+                q: "Les patients peuvent-ils choisir leurs horaires ?",
+                a: "Oui, les patients sélectionnent uniquement parmi les créneaux ouverts que vous avez validés. Les périodes de pause déjeuner, congés et rendez-vous déjà pris sont automatiquement verrouillés."
+              },
+              {
+                q: "Est-ce que je peux utiliser WhatsApp ?",
+                a: "Oui, l'intégration WhatsApp permet d'envoyer des rappels automatiques et personnalisés aux patients ou clients 24 heures avant leur consultation afin de limiter les oublis."
+              },
+              {
+                q: "Puis-je inviter un secrétaire ?",
+                a: "Absolument. Vous pouvez attribuer un compte dédié avec le rôle 'Secrétaire' pour gérer le planning, modifier les fiches de patients et valider les e-mails en collaboration avec le praticien."
+              },
+              {
+                q: "Mes données sont-elles protégées ?",
+                a: "La confidentialité est au cœur de MediLawAI : chaque cabinet dispose d'une base de données cloisonnée, les transferts sont chiffrés en TLS 1.3 et aucune réponse sensible n'est transmise sans validation humaine."
+              },
+              {
+                q: "Puis-je annuler mon abonnement ?",
+                a: "Oui, les abonnements sont sans engagement de durée obligatoire. Vous pouvez résilier en un clic depuis votre espace d'administration à la fin de chaque période mensuelle."
+              }
+            ].map((faq, idx) => (
+              <div
+                key={idx}
+                className="rounded-2xl border border-[#E8EDF4] bg-[#F7F9FC] overflow-hidden transition-colors"
+              >
+                <button
+                  onClick={() => toggleFaq(idx)}
+                  className="w-full p-4.5 text-left flex items-center justify-between text-xs font-bold text-[#14213D] hover:text-[#2563EB]"
+                >
+                  <span>{faq.q}</span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${openFaq === idx ? 'rotate-180 text-[#2563EB]' : ''}`} />
+                </button>
+                {openFaq === idx && (
+                  <div className="px-4.5 pb-4.5 text-xs text-slate-600 leading-relaxed border-t border-slate-100 pt-3">
+                    {faq.a}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 10. FOOTER */}
+      <footer className="bg-[#14213D] text-white pt-16 pb-12 px-6 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10 text-xs">
+          {/* Col 1 : Identité */}
+          <div className="space-y-3 md:col-span-1">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#2563EB] flex items-center justify-center text-white font-bold">
+                <Bot className="w-4 h-4" />
+              </div>
+              <span className="text-lg font-black tracking-tight text-white">MediLawAI</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed text-[11px]">
+              Votre secrétariat intelligent au service des professionnels de santé et du droit.
+            </p>
+          </div>
+
+          {/* Col 2 : Produit */}
+          <div className="space-y-2.5">
+            <span className="font-bold text-slate-200 uppercase tracking-wider text-[11px]">Produit</span>
+            <ul className="space-y-2 text-slate-400 text-[11px]">
+              <li><a href="#features" className="hover:text-white transition-colors">Fonctionnalités</a></li>
+              <li><a href="#solutions" className="hover:text-white transition-colors">Solutions</a></li>
+              <li><a href="#pricing" className="hover:text-white transition-colors">Tarifs</a></li>
+              <li><a href="#faq" className="hover:text-white transition-colors">FAQ</a></li>
             </ul>
           </div>
 
-          <div>
-            <h4 className="text-white font-bold mb-3 text-xs uppercase tracking-wider">Conformité</h4>
-            <ul className="space-y-2">
-              <li><span>Sécurité DevSecOps & Chiffrement</span></li>
-              <li><span>Protection Données Médicales</span></li>
-              <li><span>Sauvegardes Automatisées</span></li>
-              <li><span>Journal d'Audit Immutable</span></li>
+          {/* Col 3 : Accès rapides */}
+          <div className="space-y-2.5">
+            <span className="font-bold text-slate-200 uppercase tracking-wider text-[11px]">Accès</span>
+            <ul className="space-y-2 text-slate-400 text-[11px]">
+              <li><button onClick={onOpenPatientPortal} className="hover:text-white transition-colors text-left">Portail Patient</button></li>
+              <li><button onClick={() => onOpenAuth && onOpenAuth('LOGIN')} className="hover:text-white transition-colors text-left">Espace Professionnel</button></li>
+              <li><button onClick={onOpenOnboarding} className="hover:text-white transition-colors text-left">Créer mon cabinet</button></li>
             </ul>
           </div>
 
-          <div>
-            <h4 className="text-white font-bold mb-3 text-xs uppercase tracking-wider">Contact & Support</h4>
-            <p className="text-xs">Support technique basé en Tunisie disponible 7j/7.</p>
-            <div className="mt-3 font-semibold text-white">contact@medilawai.tn</div>
-            <div className="text-xs mt-1">+216 71 234 567</div>
+          {/* Col 4 : Informations & Contact */}
+          <div className="space-y-2.5">
+            <span className="font-bold text-slate-200 uppercase tracking-wider text-[11px]">Informations</span>
+            <ul className="space-y-2 text-slate-400 text-[11px]">
+              <li><span>Confidentialité & Sécurité</span></li>
+              <li><span>Conditions d'utilisation</span></li>
+              <li>
+                <a href="mailto:contact@medilawai.tn" className="text-blue-400 hover:underline">
+                  contact@medilawai.tn
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto border-t border-slate-800/80 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
-          <div>© 2026 MediLawAI SaaS. Tous droits réservés.</div>
-          <div className="flex items-center gap-4">
-            <button onClick={onEnterApp} className="text-blue-400 hover:underline">Accès Espace Démo</button>
-          </div>
+        <div className="max-w-7xl mx-auto mt-12 pt-6 border-t border-slate-800 text-[11px] text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span>© 2026 MediLawAI. Tous droits réservés.</span>
+          <span>Plateforme SaaS pour professionnels médicaux et juridiques en Tunisie.</span>
         </div>
       </footer>
     </div>
   );
 };
-
