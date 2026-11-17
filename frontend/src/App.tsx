@@ -23,7 +23,10 @@ import { ToastNotification } from './components/common/ToastNotification';
 import { useAppStore } from './stores/useAppStore';
 
 export default function App() {
-  const [inAppMode, setInAppMode] = useState<boolean>(true); // Default to SaaS app directly, can toggle to landing
+  // Sécurité : l'accès direct à l'espace applicatif exige un token valide en localStorage
+  const [inAppMode, setInAppMode] = useState<boolean>(() => {
+    return !!localStorage.getItem('medilaw_jwt_token');
+  });
   const [patientMode, setPatientMode] = useState<boolean>(false);
   const [cabinetPreviewMode, setCabinetPreviewMode] = useState<boolean>(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);

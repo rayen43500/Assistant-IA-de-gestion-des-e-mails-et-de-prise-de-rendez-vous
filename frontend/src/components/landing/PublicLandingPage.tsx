@@ -87,7 +87,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           {/* Boutons à droite */}
           <div className="flex items-center gap-2.5">
             <button
-              onClick={() => onOpenAuth ? onOpenAuth('LOGIN') : onEnterApp()}
+              onClick={() => onOpenAuth?.('LOGIN')}
               className="text-xs font-bold text-slate-700 hover:text-[#2563EB] px-3.5 py-2 rounded-xl transition-colors"
             >
               Connexion Professionnel
