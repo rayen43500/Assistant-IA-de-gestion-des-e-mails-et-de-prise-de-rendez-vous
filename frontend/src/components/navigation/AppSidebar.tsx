@@ -1,15 +1,15 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Inbox, 
-  Calendar, 
-  Users, 
-  Bot, 
-  BookOpen, 
-  Workflow, 
-  BarChart3, 
-  Settings, 
-  ShieldAlert, 
+import {
+  LayoutDashboard,
+  Inbox,
+  Calendar,
+  Users,
+  Bot,
+  BookOpen,
+  Workflow,
+  BarChart3,
+  Settings,
+  ShieldAlert,
   LogOut,
   Stethoscope,
   Scale,
@@ -33,9 +33,9 @@ interface AppSidebarProps {
   onReturnToSuperAdmin?: () => void;
 }
 
-export const AppSidebar: React.FC<AppSidebarProps> = ({ 
-  currentTab, 
-  onSelectTab, 
+export const AppSidebar: React.FC<AppSidebarProps> = ({
+  currentTab,
+  onSelectTab,
   onBackToLanding,
   onLogout,
   isOpenMobile = false,
@@ -56,12 +56,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     { id: 'appointments', label: 'Rendez-vous', icon: Calendar },
     { id: 'availabilities', label: 'Disponibilités', icon: Clock },
     { id: 'contacts', label: sector === 'MEDICAL' ? 'Patients' : 'Clients', icon: Users },
-    { 
-      id: 'emails', 
-      label: 'E-mails', 
-      icon: Inbox, 
+    {
+      id: 'emails',
+      label: 'E-mails',
+      icon: Inbox,
       badge: pendingEmailsCount > 0 ? pendingEmailsCount : undefined,
-      urgentBadge: emergencyCount > 0 ? emergencyCount : undefined 
+      urgentBadge: emergencyCount > 0 ? emergencyCount : undefined
     },
     { id: 'ai-assistant', label: 'Assistant IA', icon: Bot, isAi: true },
     { id: 'documents', label: 'Documents', icon: FileText },
@@ -80,15 +80,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     <>
       {/* Mobile Backdrop Overlay */}
       {isOpenMobile && (
-        <div 
+        <div
           onClick={onCloseMobile}
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 md:hidden transition-opacity"
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-[#E8EDF4] flex flex-col justify-between shrink-0 font-sans transition-transform duration-300 md:relative md:translate-x-0 ${
-        isOpenMobile ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
-      }`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-[#E8EDF4] flex flex-col justify-between shrink-0 font-sans transition-transform duration-300 md:relative md:translate-x-0 ${isOpenMobile ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        }`}>
         <div className="flex flex-col h-full overflow-hidden">
           {/* App Logo & Organization selector */}
           <div className="h-18 px-5 border-b border-[#E8EDF4] flex items-center justify-between shrink-0">
@@ -108,7 +107,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </div>
 
             <div className="flex items-center gap-1">
-              <button 
+              <button
                 onClick={onBackToLanding}
                 title="Retour au site public"
                 className="p-1.5 rounded-lg hover:bg-[#F7F9FC] text-slate-400 hover:text-[#14213D] transition-colors"
@@ -131,22 +130,20 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             <div className="p-1 bg-[#F7F9FC] rounded-xl border border-[#E8EDF4] flex items-center gap-1">
               <button
                 onClick={() => setSector('MEDICAL')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${
-                  sector === 'MEDICAL' 
-                    ? 'bg-white text-[#2563EB] shadow-xs border border-blue-100' 
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${sector === 'MEDICAL'
+                    ? 'bg-white text-[#2563EB] shadow-xs border border-blue-100'
                     : 'text-slate-500 hover:text-slate-800'
-                }`}
+                  }`}
               >
                 <Stethoscope className="w-3.5 h-3.5" />
                 <span>Médical</span>
               </button>
               <button
                 onClick={() => setSector('LEGAL')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${
-                  sector === 'LEGAL' 
-                    ? 'bg-white text-indigo-600 shadow-xs border border-indigo-100' 
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${sector === 'LEGAL'
+                    ? 'bg-white text-indigo-600 shadow-xs border border-indigo-100'
                     : 'text-slate-500 hover:text-slate-800'
-                }`}
+                  }`}
               >
                 <Scale className="w-3.5 h-3.5" />
                 <span>Juridique</span>
@@ -167,16 +164,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => handleItemClick(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all group ${
-                    isActive
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all group ${isActive
                       ? 'bg-[#2563EB] text-white shadow-xs'
                       : 'text-slate-600 hover:bg-[#F7F9FC] hover:text-[#14213D]'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3 truncate">
-                    <Icon className={`w-4 h-4 shrink-0 transition-colors ${
-                      isActive ? 'text-white' : item.isAi ? 'text-purple-600' : 'text-slate-400 group-hover:text-[#2563EB]'
-                    }`} />
+                    <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? 'text-white' : item.isAi ? 'text-purple-600' : 'text-slate-400 group-hover:text-[#2563EB]'
+                      }`} />
                     <span className="truncate">{item.label}</span>
                   </div>
 
@@ -187,9 +182,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                       </span>
                     )}
                     {item.badge && !item.urgentBadge && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-blue-50 text-[#2563EB] border border-blue-200/60'
-                      }`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-blue-50 text-[#2563EB] border border-blue-200/60'
+                        }`}>
                         {item.badge}
                       </span>
                     )}
@@ -233,9 +227,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={onLogout || onBackToLanding} 
-                title="Déconnexion" 
+              <button
+                onClick={onLogout || onBackToLanding}
+                title="Déconnexion"
                 className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
               >
                 <LogOut className="w-4 h-4" />

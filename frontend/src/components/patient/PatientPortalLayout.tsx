@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Home, 
   Search, 
@@ -8,11 +8,12 @@ import {
   User, 
   Plus, 
   LogOut, 
-  Menu,
-  X,
-  ArrowUpRight,
-  ShieldCheck,
-  Stethoscope
+  Menu, 
+  X, 
+  ArrowUpRight, 
+  ShieldCheck, 
+  Stethoscope,
+  Key
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 import { PatientHomeTab } from './tabs/PatientHomeTab';
@@ -22,6 +23,7 @@ import { PatientMyRequestsTab } from './tabs/PatientMyRequestsTab';
 import { PatientNotificationsTab } from './tabs/PatientNotificationsTab';
 import { PatientProfileTab } from './tabs/PatientProfileTab';
 import { PatientBookingModal } from './tabs/PatientBookingModal';
+import { GuestAppointmentManagementModal } from './GuestAppointmentManagementModal';
 
 interface PatientPortalLayoutProps {
   onExitPortal?: () => void;
@@ -39,6 +41,17 @@ export const PatientPortalLayout: React.FC<PatientPortalLayoutProps> = ({ onExit
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [guestToken, setGuestToken] = useState<string>('');
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenParam = urlParams.get('token');
+    if (tokenParam) {
+      setGuestToken(tokenParam);
+      setIsGuestModalOpen(true);
+    }
+  }, []);
 
   const handleStartBookingWithDoctor = (doc: any) => {
     setDoctorForBooking(doc);
@@ -205,6 +218,15 @@ export const PatientPortalLayout: React.FC<PatientPortalLayoutProps> = ({ onExit
           {/* Right: Quick Action, Notifications & Patient Menu */}
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setIsGuestModalOpen(true)}
+              className="hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+              title="Gérer un rendez-vous réservé sans compte"
+            >
+              <Key className="w-3.5 h-3.5 text-[#2563EB]" />
+              <span>Gérer RDV Invité</span>
+            </button>
+
+            <button
               onClick={() => { setDoctorForBooking(null); setIsBookingOpen(true); }}
               className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#2563EB] hover:bg-blue-700 active:scale-[0.98] text-white text-xs font-bold shadow-xs transition-all"
             >
@@ -320,6 +342,13 @@ export const PatientPortalLayout: React.FC<PatientPortalLayoutProps> = ({ onExit
         isOpen={isBookingOpen}
         onClose={() => setIsBookingOpen(false)}
         preselectedDoctor={doctorForBooking}
+      />
+
+      {/* Guest Appointment Management Modal (No account required) */}
+      <GuestAppointmentManagementModal
+        isOpen={isGuestModalOpen}
+        onClose={() => setIsGuestModalOpen(false)}
+        token={guestToken}
       />
     </div>
   );

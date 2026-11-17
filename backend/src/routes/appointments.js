@@ -1,9 +1,41 @@
 import express from 'express';
 import Appointment from '../models/Appointment.js';
 import AuditLog from '../models/AuditLog.js';
+import Doctor from '../models/Doctor.js';
 import { protect } from '../middleware/auth.js';
+import { calculateDoctorAvailability } from '../services/availabilityService.js';
 
 const router = express.Router();
+
+// GET /api/appointments/availability - Calcul dynamique des créneaux réels (grille + pause + Google Calendar)
+router.get('/availability', protect, async (req, res) => {
+  try {
+    const { date, doctorId } = req.query;
+    if (!date) {
+      return res.status(400).json({ message: 'Le paramètre date (YYYY-MM-DD) est obligatoire.' });
+    }
+
+    let targetDoctorId = doctorId;
+    if (!targetDoctorId) {
+      const doc = await Doctor.findOne({ userId: req.user._id }) || await Doctor.findOne({ tenantId: req.clinicId });
+      targetDoctorId = doc?._id;
+    }
+
+    if (!targetDoctorId) {
+      return res.status(404).json({ message: 'Aucun praticien identifié.' });
+    }
+
+    const availability = await calculateDoctorAvailability({
+      tenantId: req.clinicId,
+      doctorId: targetDoctorId,
+      date,
+    });
+
+    res.json(availability);
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors du calcul de disponibilité', error: error.message });
+  }
+});
 
 // GET /api/appointments - Liste des rendez-vous
 router.get('/', protect, async (req, res) => {

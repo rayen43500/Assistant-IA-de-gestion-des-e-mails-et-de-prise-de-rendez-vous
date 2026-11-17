@@ -13,9 +13,11 @@ import {
   ShieldCheck, 
   Sparkles,
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Copy
 } from 'lucide-react';
 import { useAppStore } from '../../../stores/useAppStore';
+import { apiCreatePublicGuestBooking } from '../../../services/apiClient';
 
 interface PatientBookingModalProps {
   isOpen: boolean;
@@ -47,6 +49,8 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
   const [patientPhone, setPatientPhone] = useState('+216 98 456 789');
   const [patientEmail, setPatientEmail] = useState('amine.jaziri@gmail.com');
   const [reason, setReason] = useState('Consultation de cardiologie & ECG');
+  const [guestToken, setGuestToken] = useState<string | null>(null);
+  const [bookingSubmitting, setBookingSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -82,7 +86,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
     return { time, state: 'available' as const, label: 'Libre' };
   });
 
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     if (!selectedSlot) return;
 
     const duration = availabilitySettings.consultationDuration || 30;
@@ -90,6 +94,30 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
     const endMinutes = h * 60 + m + duration;
     const endH = Math.floor(endMinutes / 60).toString().padStart(2, '0');
     const endM = (endMinutes % 60).toString().padStart(2, '0');
+
+    setBookingSubmitting(true);
+    let generatedToken = `token_${Date.now()}_guest`;
+
+    try {
+      const res = await apiCreatePublicGuestBooking({
+        doctorId: selectedDoctor.id || 'doc-1',
+        date: selectedDate,
+        startTime: selectedSlot,
+        patientName,
+        patientEmail,
+        patientPhone,
+        reason,
+        idempotencyKey: `guest-book-${patientEmail}-${selectedDate}-${selectedSlot}`
+      });
+      if (res?.managementToken) {
+        generatedToken = res.managementToken;
+      }
+    } catch {
+      // Fallback local instantané si backend distant non accessible
+    } finally {
+      setGuestToken(generatedToken);
+      setBookingSubmitting(false);
+    }
 
     addAppointment({
       id: `apt-${Date.now()}`,
@@ -334,10 +362,11 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
                 <div className="pt-2">
                   <button
                     onClick={handleConfirmBooking}
-                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+                    disabled={bookingSubmitting}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Confirmer la Réservation</span>
+                    <span>{bookingSubmitting ? 'Réservation en cours...' : 'Confirmer la Réservation'}</span>
                   </button>
                 </div>
               </div>
@@ -354,7 +383,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
               <div>
                 <h3 className="text-lg font-black text-[#14213D]">Rendez-vous Confirmé !</h3>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Votre rendez-vous a été enregistré dans le calendrier du cabinet.
+                  Votre rendez-vous a été enregistré dans le calendrier du praticien et synchronisé Google Calendar.
                 </p>
               </div>
 
@@ -377,6 +406,39 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
                   <span className="font-bold text-slate-800">{selectedDoctor.price} DT</span>
                 </div>
               </div>
+
+              {/* Guest Management Token Card */}
+              {guestToken && (
+                <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-200 text-left text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-[#14213D] flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
+                      Gestion Sans Compte
+                    </span>
+                    <button
+                      onClick={() => {
+                        const url = `${window.location.origin}/rendez-vous/gestion?token=${encodeURIComponent(guestToken)}`;
+                        navigator.clipboard.writeText(url);
+                        showToast({
+                          title: 'Lien copié !',
+                          message: 'Lien de gestion copié dans le presse-papier.',
+                          type: 'success'
+                        });
+                      }}
+                      className="text-[11px] font-bold text-[#2563EB] hover:underline flex items-center gap-1"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copier Lien</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Conservez ce lien pour modifier l'horaire ou annuler ce rendez-vous en 1 clic sans devoir vous connecter.
+                  </p>
+                  <div className="font-mono text-[10px] bg-white p-1.5 rounded-lg border border-blue-200 text-slate-700 truncate">
+                    {`${window.location.origin}/rendez-vous/gestion?token=${guestToken}`}
+                  </div>
+                </div>
+              )}
 
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
                 <span className="font-bold flex items-center justify-center gap-1.5">

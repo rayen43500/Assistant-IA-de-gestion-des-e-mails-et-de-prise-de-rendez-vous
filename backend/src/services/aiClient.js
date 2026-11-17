@@ -47,3 +47,6 @@ export const checkHealthAI = async () => {
     return { status: 'DEGRADED', error: error.message };
   }
 };
+
+export const queryAiService = classifyEmailContent;
+

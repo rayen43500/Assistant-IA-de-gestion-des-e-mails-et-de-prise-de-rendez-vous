@@ -13,6 +13,9 @@ import appointmentRoutes from './routes/appointments.js';
 import knowledgeRoutes from './routes/knowledge.js';
 import clinicRoutes from './routes/clinics.js';
 import aiRoutes from './routes/ai.js';
+import integrationsRoutes from './routes/integrations.js';
+import emailRoutingRoutes from './routes/emailRouting.js';
+import publicBookingRoutes from './routes/publicBooking.js';
 import { seedInitialData } from './config/seed.js';
 
 dotenv.config();
@@ -62,10 +65,14 @@ app.use((req, res, next) => {
 // Routes API REST
 app.use('/api/auth', authRoutes);
 app.use('/api/emails', emailRoutes);
+app.use('/api/emails', emailRoutingRoutes);
+app.use('/api/webhooks', emailRoutingRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/clinics', clinicRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/integrations', integrationsRoutes);
+app.use('/api/public', publicBookingRoutes);
 
 // Route racine d'accueil API
 app.get('/', (req, res) => {

@@ -143,3 +143,69 @@ export const apiCheckBackendHealth = async () => {
   const response = await apiClient.get('/health');
   return response.data;
 };
+
+// ========================================================
+// 5. INTÉGRATIONS GOOGLE OAUTH MULTI-PRATICIEN
+// ========================================================
+
+export const apiGetGoogleConnectUrl = async () => {
+  const response = await apiClient.get('/api/integrations/google/connect');
+  return response.data;
+};
+
+export const apiGetGoogleStatus = async () => {
+  const response = await apiClient.get('/api/integrations/google/status');
+  return response.data;
+};
+
+export const apiDisconnectGoogle = async () => {
+  const response = await apiClient.delete('/api/integrations/google/disconnect');
+  return response.data;
+};
+
+// ========================================================
+// 6. DISPONIBILITÉS CENTRALISÉES & RÉSERVATION PUBLIQUE
+// ========================================================
+
+export const apiFetchDoctorAvailability = async (date: string, doctorId?: string) => {
+  const url = doctorId 
+    ? `/api/appointments/availability?date=${date}&doctorId=${doctorId}`
+    : `/api/appointments/availability?date=${date}`;
+  const response = await apiClient.get(url);
+  return response.data;
+};
+
+export const apiFetchPublicDoctors = async () => {
+  const response = await apiClient.get('/api/public/doctors');
+  return response.data;
+};
+
+export const apiFetchPublicDoctorAvailability = async (doctorId: string, date: string) => {
+  const response = await apiClient.get(`/api/public/doctors/${doctorId}/availability?date=${date}`);
+  return response.data;
+};
+
+export const apiCreatePublicGuestBooking = async (bookingData: {
+  doctorId: string;
+  date: string;
+  startTime: string;
+  patientName: string;
+  patientEmail: string;
+  patientPhone: string;
+  reason?: string;
+  idempotencyKey?: string;
+}) => {
+  const response = await apiClient.post('/api/public/bookings', bookingData);
+  return response.data;
+};
+
+export const apiGetPublicBookingByToken = async (token: string) => {
+  const response = await apiClient.get(`/api/public/bookings/${token}`);
+  return response.data;
+};
+
+export const apiCancelPublicBookingByToken = async (token: string) => {
+  const response = await apiClient.post(`/api/public/bookings/${token}/cancel`);
+  return response.data;
+};
+
