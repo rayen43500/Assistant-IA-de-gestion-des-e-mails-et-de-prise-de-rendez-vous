@@ -70,6 +70,45 @@ class EvaluationMetricsResponse(BaseModel):
 
 
 # ==========================================
+# 1.B SCHÉMAS SECTION 11 MASTER PROMPT
+# ==========================================
+
+class AnalyzeEmailRequest(BaseModel):
+    email_subject: str = Field(..., example="Demande de consultation cardiologie jeudi matin")
+    email_body: str = Field(..., example="Bonjour, je souhaite un rendez-vous ce jeudi vers 10h avec le Dr. Ben Salem.")
+    sender_email: Optional[str] = Field(None, example="patient@gmail.com")
+    doctor_context: Optional[Dict[str, Any]] = Field(None, example={"name": "Dr. Youssef Ben Salem", "specialty": "Cardiologie", "consultationDuration": 30})
+    available_slots: Optional[List[str]] = Field(None, example=["10:00", "10:30", "11:00"])
+    practice_name: Optional[str] = Field(None, example="Cabinet Médical Dr. Ben Salem")
+
+class AnalyzeEmailResponse(BaseModel):
+    intent: str = Field(..., example="BOOKING_REQUEST")
+    urgency: str = Field(..., example="LOW")
+    preferred_date: Optional[str] = Field(None, example="2026-11-05")
+    preferred_period: Optional[str] = Field(None, example="MORNING")
+    preferred_time: Optional[str] = Field(None, example="10:00")
+    patient_name: Optional[str] = Field(None, example="Amine Jaziri")
+    patient_phone: Optional[str] = Field(None, example="+216 98 123 456")
+    reason_summary: Optional[str] = Field(None, example="Consultation cardiologique")
+    requires_human: bool = Field(False, example=False)
+    confidence: float = Field(0.95, example=0.95)
+    suggested_slots: Optional[List[str]] = Field(None, example=["10:00", "10:30"])
+    reply_draft: str = Field(..., example="Bonjour, nous pouvons vous proposer...")
+
+class ExtractIntentRequest(BaseModel):
+    text: str
+
+class GenerateReplyRequest(BaseModel):
+    intent: str
+    urgency: str
+    patient_name: Optional[str] = None
+    doctor_name: Optional[str] = None
+    confirmed_slot: Optional[str] = None
+    suggested_slots: Optional[List[str]] = None
+    notes: Optional[str] = None
+
+
+# ==========================================
 # 2. DEVSECOPS & SÉCURITÉ : DÉTECTION PROMPT INJECTION
 # ==========================================
 
@@ -299,6 +338,190 @@ def evaluate_metrics():
         testSampleSize=500,
         categories=["APPOINTMENT", "PRICING", "EMERGENCY", "ADMINISTRATIVE", "SPAM"],
     )
+
+
+# ==========================================
+# 5. ENDPOINTS SECTION 11 MASTER PROMPT
+# ==========================================
+
+@app.post("/health")
+def health_check_post():
+    return health_check()
+
+
+@app.post("/analyze-email", response_model=AnalyzeEmailResponse)
+def analyze_email_endpoint(req: AnalyzeEmailRequest):
+    """
+    Section 11 Master Prompt : Analyse d'e-mail structurée multi-médecins avec garde-fous de sécurité,
+    extraction d'entités, détection d'urgence vitale et proposition de réponse adaptée au praticien.
+    """
+    full_text = f"{req.email_subject} {req.email_body}".strip()
+    lower = full_text.lower()
+    
+    # Sécurité DevSecOps : Injection prompt
+    if check_prompt_injection(lower):
+        return AnalyzeEmailResponse(
+            intent="OTHER",
+            urgency="HIGH",
+            reason_summary="Tentative de manipulation de prompt bloquée",
+            requires_human=True,
+            confidence=0.99,
+            reply_draft="Bonjour,\n\nVotre message n'a pas pu être traité automatiquement en raison de nos politiques de sécurité. Notre secrétariat prendra contact avec vous si nécessaire.\n\nCordialement."
+        )
+
+    # 1. Détection Prioritaire d'Urgence (SAMU 190 / 198)
+    urgencies = [k for k in KEYWORDS_EMERGENCY if k in lower]
+    if urgencies:
+        doctor_name = (req.doctor_context or {}).get("name", "Dr. Ben Salem")
+        practice_name = req.practice_name or "Cabinet Médical"
+        emergency_reply = (
+            f"🚨 URGENCE MÉDICALE :\n\n"
+            f"Si vous présentez une douleur thoracique intense, une détresse respiratoire ou une urgence vitale, "
+            f"contactez immédiatement le SAMU (190) ou la Protection Civile (198), ou rendez-vous au service d'urgences le plus proche.\n\n"
+            f"Ce message a été immédiatement transmis en alerte prioritaire au praticien ({doctor_name})."
+        )
+        return AnalyzeEmailResponse(
+            intent="EMERGENCY",
+            urgency="CRITICAL",
+            reason_summary=f"Mots-clés d'urgence détectés : {', '.join(urgencies[:3])}",
+            requires_human=True,
+            confidence=0.98,
+            reply_draft=emergency_reply
+        )
+
+    # 2. Extraction d'entités
+    entities = extract_entities_from_text(full_text)
+    
+    # Détermination de l'intention
+    if any(k in lower for k in ["annuler", "annulation"]):
+        intent = "CANCELLATION"
+        urgency = "MEDIUM"
+        requires_human = False
+    elif any(k in lower for k in ["déplacer", "reprogrammer", "reporter"]):
+        intent = "RESCHEDULE"
+        urgency = "MEDIUM"
+        requires_human = False
+    elif any(k in lower for k in KEYWORDS_APPOINTMENT):
+        intent = "BOOKING_REQUEST"
+        urgency = "LOW"
+        requires_human = False
+    elif any(k in lower for k in KEYWORDS_PRICING + KEYWORDS_ADMIN):
+        intent = "INFORMATION"
+        urgency = "LOW"
+        requires_human = False
+    else:
+        intent = "OTHER"
+        urgency = "LOW"
+        requires_human = True
+
+    # Détection Période (Matin / Après-midi)
+    preferred_period = None
+    if any(k in lower for k in ["matin", "matinée", "début de matinée"]):
+        preferred_period = "MORNING"
+    elif any(k in lower for k in ["après-midi", "aprem", "soir"]):
+        preferred_period = "AFTERNOON"
+
+    # Filtrage des créneaux suggérés
+    suggested = []
+    if req.available_slots:
+        if preferred_period == "MORNING":
+            suggested = [s for s in req.available_slots if s < "12:30"][:3]
+        elif preferred_period == "AFTERNOON":
+            suggested = [s for s in req.available_slots if s >= "14:00"][:3]
+        if not suggested:
+            suggested = req.available_slots[:3]
+
+    # Construction du brouillon de réponse
+    doctor_name = (req.doctor_context or {}).get("name", "Dr. Youssef Ben Salem")
+    practice_name = req.practice_name or "Cabinet Médical"
+    
+    if intent == "BOOKING_REQUEST":
+        slots_text = f" Nous pouvons notamment vous proposer les créneaux suivants : {', '.join(suggested)}." if suggested else ""
+        draft = (
+            f"Bonjour,\n\n"
+            f"Nous avons bien reçu votre demande de rendez-vous pour le {doctor_name}.{slots_text}\n"
+            f"Merci de nous confirmer le créneau qui vous convient le mieux ou de réserver directement en ligne sans compte via notre portail sécurisé.\n\n"
+            f"Bien cordialement,\n"
+            f"{practice_name}"
+        )
+    elif intent == "CANCELLATION":
+        draft = (
+            f"Bonjour,\n\n"
+            f"Votre demande d'annulation a bien été prise en compte pour le {doctor_name}. Votre créneau a été libéré avec succès.\n\n"
+            f"Bien cordialement,\n"
+            f"{practice_name}"
+        )
+    elif intent == "RESCHEDULE":
+        slots_text = f" Voici des créneaux disponibles prochainement : {', '.join(suggested)}." if suggested else ""
+        draft = (
+            f"Bonjour,\n\n"
+            f"Nous avons bien pris note de votre souhait de reprogrammer votre rendez-vous.{slots_text}\n"
+            f"Merci de nous indiquer votre préférence.\n\n"
+            f"Bien cordialement,\n"
+            f"{practice_name}"
+        )
+    else:
+        draft = (
+            f"Bonjour,\n\n"
+            f"Nous accusons bonne réception de votre message concernant le {practice_name}. "
+            f"Nous revenons vers vous dans les meilleurs délais.\n\n"
+            f"Bien cordialement,\n"
+            f"{practice_name}"
+        )
+
+    return AnalyzeEmailResponse(
+        intent=intent,
+        urgency=urgency,
+        preferred_date=entities.requestedDate,
+        preferred_period=preferred_period,
+        preferred_time=entities.requestedTime,
+        patient_name=None,
+        patient_phone=entities.phone,
+        reason_summary=f"Demande {intent.lower()} pour {doctor_name}",
+        requires_human=requires_human,
+        confidence=0.95,
+        suggested_slots=suggested,
+        reply_draft=draft
+    )
+
+
+@app.post("/extract-appointment-intent")
+def extract_intent_endpoint(req: ExtractIntentRequest):
+    entities = extract_entities_from_text(req.text)
+    intent, conf, _, urgencies = classify_text("Analyse", req.text)
+    return {
+        "intent": intent,
+        "confidence": conf,
+        "entities": entities.model_dump(),
+        "is_emergency": len(urgencies) > 0
+    }
+
+
+@app.post("/generate-reply")
+def generate_reply_endpoint(req: GenerateReplyRequest):
+    doctor = req.doctor_name or "Dr. Youssef Ben Salem"
+    if req.intent == "EMERGENCY":
+        reply = (
+            f"🚨 ALERTE URGENCE :\n"
+            f"En cas de risque vital immédiat, contactez le SAMU au 190. "
+            f"Le cabinet du {doctor} a été prévenu."
+        )
+    elif req.confirmed_slot:
+        reply = (
+            f"Bonjour,\n\n"
+            f"Votre rendez-vous avec le {doctor} est bien confirmé pour le créneau suivant : {req.confirmed_slot}.\n"
+            f"Un rappel vous sera transmis la veille par WhatsApp/SMS.\n\n"
+            f"Bien cordialement."
+        )
+    else:
+        slots_str = f" : {', '.join(req.suggested_slots)}" if req.suggested_slots else ""
+        reply = (
+            f"Bonjour,\n\n"
+            f"Nous avons bien noté votre demande pour le {doctor}. "
+            f"Voici nos prochaines disponibilités{slots_str}.\n\n"
+            f"Bien cordialement."
+        )
+    return {"reply": reply}
 
 
 if __name__ == "__main__":

@@ -48,5 +48,41 @@ export const checkHealthAI = async () => {
   }
 };
 
+export const analyzeEmailStructured = async ({
+  subject,
+  body,
+  senderEmail,
+  doctorContext,
+  availableSlots,
+  practiceName
+}) => {
+  try {
+    const response = await axios.post(`${AI_SERVICE_URL}/analyze-email`, {
+      email_subject: subject,
+      email_body: body,
+      sender_email: senderEmail,
+      doctor_context: doctorContext,
+      available_slots: availableSlots,
+      practice_name: practiceName
+    }, { timeout: 10000 });
+    return response.data;
+  } catch (error) {
+    console.warn(`[AI-Service] /analyze-email indisponible, bascule sur classifyEmailContent: ${error.message}`);
+    const fallback = await classifyEmailContent({ subject, body });
+    return {
+      intent: fallback.intent === 'APPOINTMENT' ? 'BOOKING_REQUEST' : fallback.intent,
+      urgency: fallback.isEmergency ? 'CRITICAL' : 'LOW',
+      preferred_date: fallback.extractedEntities?.requestedDate,
+      preferred_time: fallback.extractedEntities?.requestedTime,
+      patient_phone: fallback.extractedEntities?.phone,
+      reason_summary: subject,
+      requires_human: true,
+      confidence: fallback.confidence || 0.6,
+      suggested_slots: availableSlots?.slice(0, 3) || [],
+      reply_draft: fallback.suggestedReply || 'Votre message a bien été reçu.'
+    };
+  }
+};
+
 export const queryAiService = classifyEmailContent;
 
