@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import Integration from '../models/Integration.js';
 import Doctor from '../models/Doctor.js';
+import Clinic from '../models/Clinic.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { encryptData, decryptData } from '../services/cryptoService.js';
 
@@ -23,17 +24,214 @@ setInterval(() => {
 }, 300000);
 
 /**
+ * GET /api/integrations/google/config
+ * Récupère les identifiants configurés pour Google Workspace
+ */
+router.get('/google/config', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const clinic = await Clinic.findById(req.clinicId);
+    let doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) doctor = await Doctor.findOne({ tenantId: req.clinicId });
+
+    const googleCfg = clinic?.integrationsConfig?.googleWorkspace || {};
+    return res.json({
+      clientId: googleCfg.clientId || process.env.GOOGLE_CLIENT_ID || '',
+      redirectUri: googleCfg.redirectUri || process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/integrations/google/callback`,
+      gmailEnabled: googleCfg.gmailEnabled !== false,
+      calendarEnabled: googleCfg.calendarEnabled !== false,
+      isConfigured: !!(googleCfg.clientId || process.env.GOOGLE_CLIENT_ID),
+      hasSecret: !!(googleCfg.encryptedClientSecret || process.env.GOOGLE_CLIENT_SECRET),
+      doctorEmail: doctor?.professionalEmail || '',
+      doctorName: doctor?.name || '',
+      doctorId: doctor?._id
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur récupération config Google', error: error.message });
+  }
+});
+
+/**
+ * POST /api/integrations/google/config
+ * Enregistre les identifiants réels Google Workspace (Client ID, Secret, Redirect URI)
+ * et associe l'e-mail propre au médecin.
+ */
+router.post('/google/config', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const { clientId, clientSecret, redirectUri, gmailEnabled, calendarEnabled, doctorEmail, doctorId } = req.body;
+
+    if (!clientId || !clientId.trim()) {
+      return res.status(400).json({ message: 'Le Google Client ID est obligatoire.' });
+    }
+
+    const clinic = await Clinic.findById(req.clinicId);
+    if (!clinic) {
+      return res.status(404).json({ message: 'Cabinet introuvable.' });
+    }
+
+    if (!clinic.integrationsConfig) {
+      clinic.integrationsConfig = {};
+    }
+
+    const existingSecret = clinic.integrationsConfig.googleWorkspace?.encryptedClientSecret || '';
+    const encryptedSecret = clientSecret?.trim() ? encryptData(clientSecret.trim()) : existingSecret;
+
+    clinic.integrationsConfig.googleWorkspace = {
+      clientId: clientId.trim(),
+      encryptedClientSecret: encryptedSecret,
+      redirectUri: redirectUri?.trim() || `${req.protocol}://${req.get('host')}/api/integrations/google/callback`,
+      gmailEnabled: gmailEnabled !== false,
+      calendarEnabled: calendarEnabled !== false,
+      isConfigured: true
+    };
+    await clinic.save();
+
+    // Mettre à jour l'email propre à ce médecin (chaque médecin a son propre email)
+    let updatedDoctor = null;
+    if (doctorEmail) {
+      const docQuery = doctorId ? { _id: doctorId } : { userId: req.user._id };
+      updatedDoctor = await Doctor.findOne(docQuery);
+      if (!updatedDoctor) updatedDoctor = await Doctor.findOne({ tenantId: req.clinicId });
+      if (updatedDoctor) {
+        updatedDoctor.professionalEmail = doctorEmail.trim().toLowerCase();
+        await updatedDoctor.save();
+
+        // Mettre à jour l'enregistrement d'intégration correspondant
+        await Integration.findOneAndUpdate(
+          { doctorId: updatedDoctor._id, provider: 'GOOGLE' },
+          { providerAccountEmail: updatedDoctor.professionalEmail }
+        );
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Configuration Google Workspace enregistrée avec succès.',
+      isConfigured: true,
+      doctorEmail: updatedDoctor?.professionalEmail || doctorEmail
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur enregistrement config Google', error: error.message });
+  }
+});
+
+/**
+ * GET /api/integrations/whatsapp/config
+ * Récupère la configuration WhatsApp Business
+ */
+router.get('/whatsapp/config', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const clinic = await Clinic.findById(req.clinicId);
+    let doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) doctor = await Doctor.findOne({ tenantId: req.clinicId });
+
+    const waCfg = clinic?.integrationsConfig?.whatsapp || {};
+    return res.json({
+      phoneNumber: waCfg.phoneNumber || doctor?.phone || '',
+      businessAccountId: waCfg.businessAccountId || '',
+      phoneNumberId: waCfg.phoneNumberId || '',
+      enabled: waCfg.enabled !== false,
+      isConfigured: !!waCfg.phoneNumber,
+      hasToken: !!waCfg.encryptedAccessToken
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur récupération config WhatsApp', error: error.message });
+  }
+});
+
+/**
+ * POST /api/integrations/whatsapp/config
+ * Enregistre la configuration WhatsApp Business
+ */
+router.post('/whatsapp/config', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const { phoneNumber, metaAccessToken, businessAccountId, phoneNumberId, enabled } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ message: 'Le numéro WhatsApp professionnel est obligatoire.' });
+    }
+
+    const clinic = await Clinic.findById(req.clinicId);
+    if (!clinic) {
+      return res.status(404).json({ message: 'Cabinet introuvable.' });
+    }
+
+    if (!clinic.integrationsConfig) {
+      clinic.integrationsConfig = {};
+    }
+
+    const existingToken = clinic.integrationsConfig.whatsapp?.encryptedAccessToken || '';
+    const encryptedToken = metaAccessToken?.trim() ? encryptData(metaAccessToken.trim()) : existingToken;
+
+    clinic.integrationsConfig.whatsapp = {
+      phoneNumber: phoneNumber.trim(),
+      encryptedAccessToken: encryptedToken,
+      businessAccountId: businessAccountId?.trim() || '',
+      phoneNumberId: phoneNumberId?.trim() || '',
+      enabled: enabled !== false,
+      isConfigured: true
+    };
+    await clinic.save();
+
+    // Mettre à jour l'intégration du médecin
+    let doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) doctor = await Doctor.findOne({ tenantId: req.clinicId });
+    if (doctor) {
+      doctor.phone = phoneNumber.trim();
+      await doctor.save();
+
+      await Integration.findOneAndUpdate(
+        { doctorId: doctor._id, provider: 'WHATSAPP' },
+        {
+          tenantId: req.clinicId,
+          doctorId: doctor._id,
+          provider: 'WHATSAPP',
+          providerAccountEmail: phoneNumber.trim(),
+          connectionStatus: 'CONNECTED',
+          syncStatus: 'ACTIVE',
+          lastSyncAt: new Date(),
+          encryptedCredentialReference: encryptedToken
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: 'Configuration WhatsApp Business enregistrée avec succès.',
+      isConfigured: true
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur enregistrement config WhatsApp', error: error.message });
+  }
+});
+
+/**
+ * GET /api/integrations/doctors
+ * Liste tous les médecins du cabinet avec leur e-mail individuel
+ */
+router.get('/doctors', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const doctors = await Doctor.find({ tenantId: req.clinicId }).select('name professionalEmail specialty phone appointmentDuration');
+    res.json({ doctors });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur liste médecins', error: error.message });
+  }
+});
+
+/**
  * GET /api/integrations/google/connect
  * Génère une URL d'autorisation Google OAuth 2.0 unique et sécurisée pour le médecin authentifié
  */
 router.get('/google/connect', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/integrations/google/callback`;
+    const clinic = await Clinic.findById(req.clinicId);
+    const googleCfg = clinic?.integrationsConfig?.googleWorkspace;
+    const clientId = googleCfg?.clientId || process.env.GOOGLE_CLIENT_ID;
+    const redirectUri = googleCfg?.redirectUri || process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/integrations/google/callback`;
 
     if (!clientId) {
-      return res.status(500).json({
-        message: 'Configuration Google OAuth incomplète (GOOGLE_CLIENT_ID manquant sur le serveur)',
+      return res.status(400).json({
+        message: 'Google Client ID manquant. Veuillez configurer vos clés dans les Paramètres du Cabinet.',
       });
     }
 
@@ -109,9 +307,18 @@ router.get('/google/callback', async (req, res) => {
   const { tenantId, doctorId } = stateMeta;
 
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/integrations/google/callback`;
+    const clinic = await Clinic.findById(tenantId);
+    const googleCfg = clinic?.integrationsConfig?.googleWorkspace;
+    const clientId = googleCfg?.clientId || process.env.GOOGLE_CLIENT_ID;
+    let clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (googleCfg?.encryptedClientSecret) {
+      try {
+        clientSecret = decryptData(googleCfg.encryptedClientSecret);
+      } catch (e) {
+        console.warn('Erreur déchiffrement client secret Google:', e.message);
+      }
+    }
+    const redirectUri = googleCfg?.redirectUri || process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/integrations/google/callback`;
 
     // Échanger le code contre les tokens auprès de Google
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {

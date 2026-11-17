@@ -50,6 +50,24 @@ const ClinicSchema = new mongoose.Schema({
     emergencyEscalationPhone: String,
     emergencyEscalationEmail: String,
   },
+  integrationsConfig: {
+    googleWorkspace: {
+      clientId: { type: String, default: '' },
+      encryptedClientSecret: { type: String, default: '' },
+      redirectUri: { type: String, default: '' },
+      gmailEnabled: { type: Boolean, default: true },
+      calendarEnabled: { type: Boolean, default: true },
+      isConfigured: { type: Boolean, default: false }
+    },
+    whatsapp: {
+      phoneNumber: { type: String, default: '' },
+      encryptedAccessToken: { type: String, default: '' },
+      businessAccountId: { type: String, default: '' },
+      phoneNumberId: { type: String, default: '' },
+      enabled: { type: Boolean, default: true },
+      isConfigured: { type: Boolean, default: false }
+    }
+  },
 }, { timestamps: true });
 
 export default mongoose.model('Clinic', ClinicSchema);
