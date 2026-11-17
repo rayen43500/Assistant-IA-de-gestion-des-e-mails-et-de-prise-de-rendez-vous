@@ -61,7 +61,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E8EDF4]">
         <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={onEnterApp}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
             <div className="w-10 h-10 rounded-2xl bg-[#2563EB] flex items-center justify-center text-white shadow-md shadow-blue-600/20">
               <Bot className="w-5 h-5" />
             </div>
@@ -128,14 +128,6 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             >
               <span>Créer mon cabinet</span>
               <ArrowRight className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={onEnterApp}
-              className="px-6 py-3.5 bg-white hover:bg-slate-50 border border-[#E8EDF4] text-[#14213D] rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
-            >
-              <span>Découvrir la plateforme</span>
-              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
             </button>
           </div>
 
