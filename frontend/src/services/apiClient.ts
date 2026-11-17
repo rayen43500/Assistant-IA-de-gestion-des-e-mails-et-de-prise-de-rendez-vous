@@ -163,6 +163,21 @@ export const apiDisconnectGoogle = async () => {
   return response.data;
 };
 
+export const apiGetWhatsAppStatus = async () => {
+  const response = await apiClient.get('/api/integrations/whatsapp/status');
+  return response.data;
+};
+
+export const apiConnectWhatsApp = async (data: { phoneNumber: string; metaAccountId?: string }) => {
+  const response = await apiClient.post('/api/integrations/whatsapp/connect', data);
+  return response.data;
+};
+
+export const apiDisconnectWhatsApp = async () => {
+  const response = await apiClient.delete('/api/integrations/whatsapp/disconnect');
+  return response.data;
+};
+
 // ========================================================
 // 6. DISPONIBILITÉS CENTRALISÉES & RÉSERVATION PUBLIQUE
 // ========================================================

@@ -272,4 +272,131 @@ router.delete('/google/disconnect', protect, authorize('PRATICIEN', 'ADMIN', 'SU
   }
 });
 
+/**
+ * GET /api/integrations/whatsapp/status
+ * Récupère l'état de connexion de WhatsApp Business pour le praticien/cabinet
+ */
+router.get('/whatsapp/status', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    let doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) {
+      doctor = await Doctor.findOne({ tenantId: req.clinicId });
+    }
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Profil praticien introuvable.' });
+    }
+
+    const integration = await Integration.findOne({
+      doctorId: doctor._id,
+      provider: 'WHATSAPP',
+      connectionStatus: 'CONNECTED'
+    });
+
+    if (!integration) {
+      return res.json({ connected: false, status: 'NOT_CONNECTED' });
+    }
+
+    return res.json({
+      connected: true,
+      phoneNumber: integration.providerAccountEmail,
+      status: 'ACTIVE',
+      lastSyncAt: integration.lastSyncAt,
+      doctor: {
+        id: doctor._id,
+        name: doctor.name
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la vérification WhatsApp', error: error.message });
+  }
+});
+
+/**
+ * POST /api/integrations/whatsapp/connect
+ * Enregistre et active le numéro WhatsApp Business pour les rappels de consultation et alertes
+ */
+router.post('/whatsapp/connect', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const { phoneNumber, metaAccountId, webhookSecret } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ message: 'Numéro de téléphone WhatsApp requis (ex: +216 98 123 456).' });
+    }
+
+    let doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) {
+      doctor = await Doctor.findOne({ tenantId: req.clinicId });
+    }
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Profil praticien introuvable.' });
+    }
+
+    const encryptedCredentials = encryptData({
+      phoneNumber,
+      metaAccountId: metaAccountId || 'meta_wa_act_default',
+      webhookSecret: webhookSecret || 'secret_wa_meta',
+      connectedAt: new Date()
+    });
+
+    const integration = await Integration.findOneAndUpdate(
+      { doctorId: doctor._id, provider: 'WHATSAPP' },
+      {
+        tenantId: req.clinicId,
+        doctorId: doctor._id,
+        provider: 'WHATSAPP',
+        providerAccountEmail: phoneNumber,
+        encryptedCredentialReference: encryptedCredentials,
+        connectionStatus: 'CONNECTED',
+        syncStatus: 'ACTIVE',
+        lastSyncAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      connected: true,
+      phoneNumber,
+      message: 'WhatsApp Business connecté avec succès aux rappels automatisés 24h.'
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la connexion WhatsApp', error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/integrations/whatsapp/disconnect
+ * Déconnecte le service WhatsApp
+ */
+router.delete('/whatsapp/disconnect', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    let doctor = await Doctor.findOne({ userId: req.user._id });
+    if (!doctor) {
+      doctor = await Doctor.findOne({ tenantId: req.clinicId });
+    }
+
+    if (!doctor) {
+      return res.status(404).json({ message: 'Profil praticien introuvable.' });
+    }
+
+    await Integration.findOneAndUpdate(
+      { doctorId: doctor._id, provider: 'WHATSAPP' },
+      {
+        connectionStatus: 'DISCONNECTED',
+        syncStatus: 'PAUSED',
+        encryptedCredentialReference: encryptData({ disconnected: true, at: new Date() })
+      }
+    );
+
+    res.json({
+      success: true,
+      message: 'WhatsApp Business déconnecté.'
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la déconnexion WhatsApp', error: error.message });
+  }
+});
+
 export default router;
