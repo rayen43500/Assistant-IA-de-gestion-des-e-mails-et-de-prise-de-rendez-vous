@@ -35,6 +35,15 @@ export const EnterpriseSettingsView: React.FC = () => {
 
   const [emergencyPhone, setEmergencyPhone] = useState('+216 98 111 222');
   const [openingHours, setOpeningHours] = useState('08:30 - 17:30');
+  const [activeSection, setActiveSection] = useState<'all' | 'ai' | 'google' | 'cabinet'>('all');
+
+  const handleSave = () => {
+    showToast({
+      title: 'Paramètres enregistrés !',
+      message: 'Les réglages d’autonomie IA, de boîte Gmail et de synchronisation Google Calendar ont été sauvegardés.',
+      type: 'success'
+    });
+  };
 
   // État de l'intégration Google Workspace (Gmail + Google Calendar)
   const [googleStatus, setGoogleStatus] = useState<{
@@ -148,7 +157,30 @@ export const EnterpriseSettingsView: React.FC = () => {
         <p className="text-xs text-slate-500">Gérez le niveau d’autonomie du modèle, les contacts d’urgence et la sécurité multi-tenant</p>
       </div>
 
+      {/* Onglets Filtres Rapides */}
+      <div className="flex items-center gap-2 border-b border-[#E8EDF4] pb-3 overflow-x-auto">
+        {[
+          { id: 'all', label: 'Vue d’ensemble' },
+          { id: 'ai', label: 'Autonomie IA' },
+          { id: 'google', label: 'Google Workspace & Agenda' },
+          { id: 'cabinet', label: 'Informations Cabinet' }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveSection(tab.id as any)}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeSection === tab.id
+                ? 'bg-[#2563EB] text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-[#E8EDF4]'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Autonomy Level Settings */}
+      {(activeSection === 'all' || activeSection === 'ai') && (
       <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-6 space-y-4">
         <div className="flex items-center gap-2.5">
           <Sparkles className="w-5 h-5 text-purple-600" />
@@ -215,8 +247,10 @@ export const EnterpriseSettingsView: React.FC = () => {
           />
         </div>
       </div>
+      )}
 
       {/* Google Workspace & Hybrid Calendar Integration */}
+      {(activeSection === 'all' || activeSection === 'google') && (
       <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -327,8 +361,10 @@ export const EnterpriseSettingsView: React.FC = () => {
           </span>
         </div>
       </div>
+      )}
 
       {/* Structure & Escalade Info */}
+      {(activeSection === 'all' || activeSection === 'cabinet') && (
       <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-6 space-y-4">
         <h2 className="text-sm font-bold text-[#14213D]">Informations de la Structure & Escalade SAMU</h2>
 
@@ -363,6 +399,7 @@ export const EnterpriseSettingsView: React.FC = () => {
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 };

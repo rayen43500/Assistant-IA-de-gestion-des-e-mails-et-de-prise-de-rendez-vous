@@ -10,7 +10,8 @@ import {
   Sparkles, 
   CheckCircle2, 
   AlertTriangle,
-  Menu
+  Menu,
+  Settings
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 
@@ -18,6 +19,7 @@ interface AppTopHeaderProps {
   onOpenQuickAppointment: () => void;
   onToggleMobileMenu?: () => void;
   onOpenAuthModal?: () => void;
+  onOpenSettings?: () => void;
   onLogout?: () => void;
 }
 
@@ -25,6 +27,7 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({
   onOpenQuickAppointment,
   onToggleMobileMenu,
   onOpenAuthModal,
+  onOpenSettings,
   onLogout
 }) => {
   const { sector, organizationName, language, setLanguage, emails, showToast, currentUser, logout, isAuthenticated } = useAppStore();
@@ -161,6 +164,19 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({
                   <span>{currentUser.role}</span> • <span>{currentUser.organizationName}</span>
                 </div>
               </div>
+
+              {onOpenSettings && (
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    onOpenSettings();
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2"
+                >
+                  <Settings className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Paramètres du Cabinet</span>
+                </button>
+              )}
 
               <button
                 onClick={() => {

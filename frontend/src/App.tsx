@@ -210,6 +210,7 @@ export default function App() {
               <AppTopHeader
                 onOpenQuickAppointment={() => setCurrentTab('appointments')}
                 onToggleMobileMenu={() => setMobileMenuOpen(!mobileMenuOpen)}
+                onOpenSettings={() => setCurrentTab('settings')}
                 onOpenAuthModal={() => {
                   setAuthModalMode('LOGIN');
                   setShowAuthModal(true);
