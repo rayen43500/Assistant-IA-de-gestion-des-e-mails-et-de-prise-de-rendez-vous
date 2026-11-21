@@ -838,7 +838,6 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           <div className="space-y-2.5">
             <span className="font-bold text-slate-200 uppercase tracking-wider text-[11px]">Accès</span>
             <ul className="space-y-2 text-slate-400 text-[11px]">
-              <li><button onClick={onOpenPatientPortal} className="hover:text-white transition-colors text-left">Portail Patient</button></li>
               <li><button onClick={() => onOpenAuth && onOpenAuth('LOGIN')} className="hover:text-white transition-colors text-left">Espace Professionnel</button></li>
               <li><button onClick={onOpenOnboarding} className="hover:text-white transition-colors text-left">Créer mon cabinet</button></li>
             </ul>

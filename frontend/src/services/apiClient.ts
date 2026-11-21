@@ -178,6 +178,45 @@ export const apiDisconnectWhatsApp = async () => {
   return response.data;
 };
 
+export const apiGetGoogleWorkspaceConfig = async () => {
+  const response = await apiClient.get('/api/integrations/google/config');
+  return response.data;
+};
+
+export const apiSaveGoogleWorkspaceConfig = async (configData: {
+  clientId: string;
+  clientSecret?: string;
+  redirectUri: string;
+  gmailEnabled: boolean;
+  calendarEnabled: boolean;
+  doctorEmail?: string;
+  doctorId?: string;
+}) => {
+  const response = await apiClient.post('/api/integrations/google/config', configData);
+  return response.data;
+};
+
+export const apiGetWhatsAppConfig = async () => {
+  const response = await apiClient.get('/api/integrations/whatsapp/config');
+  return response.data;
+};
+
+export const apiSaveWhatsAppConfig = async (configData: {
+  phoneNumber: string;
+  metaAccessToken?: string;
+  businessAccountId?: string;
+  phoneNumberId?: string;
+  enabled: boolean;
+}) => {
+  const response = await apiClient.post('/api/integrations/whatsapp/config', configData);
+  return response.data;
+};
+
+export const apiGetPracticeDoctors = async () => {
+  const response = await apiClient.get('/api/integrations/doctors');
+  return response.data;
+};
+
 // ========================================================
 // 6. DISPONIBILITÉS CENTRALISÉES & RÉSERVATION PUBLIQUE
 // ========================================================
