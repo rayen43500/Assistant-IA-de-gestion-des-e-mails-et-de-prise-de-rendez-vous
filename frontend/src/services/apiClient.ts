@@ -163,6 +163,11 @@ export const apiDisconnectGoogle = async () => {
   return response.data;
 };
 
+export const apiDirectConnectGoogle = async (data: { email: string; doctorId?: string }) => {
+  const response = await apiClient.post('/api/integrations/google/direct-connect', data);
+  return response.data;
+};
+
 export const apiGetWhatsAppStatus = async () => {
   const response = await apiClient.get('/api/integrations/whatsapp/status');
   return response.data;

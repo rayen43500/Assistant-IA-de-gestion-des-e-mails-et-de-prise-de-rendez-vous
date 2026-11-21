@@ -78,6 +78,20 @@ export default function App() {
     checkConnection();
     loadEmails();
     loadAppointments();
+
+    // Détection du retour d'autorisation Google OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google_connected') === 'success') {
+      const email = params.get('doctor_email') || '';
+      setInAppMode(true);
+      setCurrentTab('settings');
+      showToast({
+        title: 'Google Workspace connecté !',
+        message: `Compte Google synchronisé avec succès${email ? ` (${email})` : ''}.`,
+        type: 'success'
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   return (
