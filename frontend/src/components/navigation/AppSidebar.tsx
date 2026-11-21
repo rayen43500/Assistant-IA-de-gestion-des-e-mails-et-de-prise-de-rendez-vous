@@ -125,29 +125,25 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </div>
           </div>
 
-          {/* Business Sector Switcher (Medical <-> Legal) */}
+          {/* Rôle Praticien Dédié - Rôle unique (Médical) */}
           <div className="p-3 border-b border-[#E8EDF4] shrink-0">
-            <div className="p-1 bg-[#F7F9FC] rounded-xl border border-[#E8EDF4] flex items-center gap-1">
-              <button
-                onClick={() => setSector('MEDICAL')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${sector === 'MEDICAL'
-                    ? 'bg-white text-[#2563EB] shadow-xs border border-blue-100'
-                    : 'text-slate-500 hover:text-slate-800'
-                  }`}
-              >
-                <Stethoscope className="w-3.5 h-3.5" />
-                <span>Médical</span>
-              </button>
-              <button
-                onClick={() => setSector('LEGAL')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all ${sector === 'LEGAL'
-                    ? 'bg-white text-indigo-600 shadow-xs border border-indigo-100'
-                    : 'text-slate-500 hover:text-slate-800'
-                  }`}
-              >
-                <Scale className="w-3.5 h-3.5" />
-                <span>Juridique</span>
-              </button>
+            <div className="p-2.5 bg-[#F7F9FC] rounded-xl border border-[#E8EDF4] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-100 text-[#2563EB] flex items-center justify-center">
+                  <Stethoscope className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold text-[#14213D]">
+                    {sector === 'MEDICAL' ? 'Cabinet Médical' : 'Cabinet Juridique'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-medium">
+                    {sector === 'MEDICAL' ? 'Cardiologie & Médecine' : 'Avocat au Barreau'}
+                  </div>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-[#2563EB] border border-blue-200">
+                Praticien
+              </span>
             </div>
           </div>
 

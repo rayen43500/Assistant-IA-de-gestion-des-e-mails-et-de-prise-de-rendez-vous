@@ -117,21 +117,26 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Démarrage du serveur et connexion DB
+// Démarrage immédiat du serveur et connexion DB en arrière-plan
 const startServer = async () => {
-  try {
-    await connectDB();
-    await seedInitialData().catch(err => console.warn('[Seed] Différé :', err.message));
-  } catch (err) {
-    console.warn('[Startup] Connexion DB différée :', err.message);
-  }
-
+  // Démarrer immédiatement le serveur HTTP
   app.listen(PORT, () => {
     console.log(`===================================================`);
     console.log(`🚀 Serveur Backend opérationnel sur le port ${PORT}`);
     console.log(`📊 Métriques Prometheus disponibles sur http://localhost:${PORT}/metrics`);
     console.log(`🩺 Health check sur http://localhost:${PORT}/health`);
     console.log(`===================================================`);
+  });
+
+  // Tenter la connexion DB sans bloquer le serveur
+  connectDB().then(async () => {
+    try {
+      await seedInitialData();
+    } catch (seedErr) {
+      console.warn('[Seed] Différé :', seedErr.message);
+    }
+  }).catch(err => {
+    console.warn('[Startup] Connexion DB différée :', err.message);
   });
 };
 
