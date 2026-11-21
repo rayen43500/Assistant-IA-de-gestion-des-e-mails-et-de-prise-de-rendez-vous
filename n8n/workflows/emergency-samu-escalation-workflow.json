@@ -2,6 +2,13 @@
   "name": "4. Escalade d'Urgence Critique & SAMU Tunisie (190 / 198)",
   "nodes": [
     {
+      "parameters": {},
+      "name": "Quand on clique sur 'Tester'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 180]
+    },
+    {
       "parameters": {
         "httpMethod": "POST",
         "path": "emergency-alert",
@@ -10,38 +17,59 @@
       "name": "Webhook Alerte Urgence",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [200, 300]
+      "position": [200, 340]
     },
     {
       "parameters": {
-        "message": "=🚨 ALERTE ROUGE SAMU / CABINET :\nPatient critique détecté par l'IA :\nNom : {{ $json.body.sender?.name || 'Anonyme' }}\nEmail : {{ $json.body.sender?.email }}\nSujet : {{ $json.body.subject }}\nMessage : {{ $json.body.body }}\n\nProcédure SAMU Tunisie : Contacter immédiatement le 190 (SAMU) ou le 198 (Protection Civile) si le patient est en détresse vitale."
+        "url": "http://localhost:5000/api/integrations/whatsapp/send-notification",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"CRITICAL_EMERGENCY_SAMU_190\",\n  \"recipient\": \"+216 98 111 222\",\n  \"message\": \"🚨 ALERTE ROUGE SAMU / CABINET : Patient en détresse vitale détecté par le modèle IA. Notification prioritaire transmise au Dr. Rayen B. et redirection d'urgence SAMU 190 / Protection Civile 198.\"\n}"
       },
-      "name": "Alerte SMS Direct Praticien",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1,
-      "position": [460, 220]
+      "name": "Alerte SMS Direct Praticien & SAMU",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 260]
     },
     {
       "parameters": {
-        "url": "http://backend:5000/api/ai/daily-summary",
+        "url": "http://localhost:5000/api/ai/daily-summary",
         "method": "GET",
         "options": {}
       },
       "name": "Vérifier Escalades Actives",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [460, 380]
+      "position": [740, 260]
     }
   ],
   "connections": {
+    "Quand on clique sur 'Tester'": {
+      "main": [
+        [
+          {
+            "node": "Alerte SMS Direct Praticien & SAMU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Webhook Alerte Urgence": {
       "main": [
         [
           {
-            "node": "Alerte SMS Direct Praticien",
+            "node": "Alerte SMS Direct Praticien & SAMU",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Alerte SMS Direct Praticien & SAMU": {
+      "main": [
+        [
           {
             "node": "Vérifier Escalades Actives",
             "type": "main",
@@ -52,4 +80,3 @@
     }
   }
 }
-

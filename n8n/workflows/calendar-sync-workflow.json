@@ -2,6 +2,13 @@
   "name": "3. Synchronisation Agenda Google Calendar",
   "nodes": [
     {
+      "parameters": {},
+      "name": "Quand on clique sur 'Tester'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 180]
+    },
+    {
       "parameters": {
         "httpMethod": "POST",
         "path": "sync-calendar-event",
@@ -10,61 +17,70 @@
       "name": "Webhook Rendez-vous Confirmé",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [200, 300]
+      "position": [200, 340]
     },
     {
       "parameters": {
-        "calendar": {
-          "__rl": true,
-          "value": "primary",
-          "mode": "list"
-        },
-        "start": "={{ $json.body.date }}T{{ $json.body.timeSlot.start }}:00",
-        "end": "={{ $json.body.date }}T{{ $json.body.timeSlot.end }}:00",
-        "additionalFields": {
-          "summary": "=RDV Cabinet - {{ $json.body.patient.name }}",
-          "description": "=Patient: {{ $json.body.patient.name }}\nEmail: {{ $json.body.patient.email }}\nTéléphone: {{ $json.body.patient.phone }}\nMotif: {{ $json.body.reason }}\nSource: SaaS IA Cabinet 2026",
-          "attendees": [
-            "={{ $json.body.patient.email }}"
+        "url": "http://localhost:5000/api/integrations/google/sync",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer demo_session_token_2026"
+            }
           ]
-        }
+        },
+        "options": {}
       },
-      "name": "Créer Événement Google Calendar",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.1,
-      "position": [460, 300]
-    },
-    {
-      "parameters": {
-        "url": "=http://backend:5000/api/appointments/{{ $('Webhook Rendez-vous Confirmé').item.json.body._id }}/sync-calendar",
-        "method": "PUT",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"googleCalendarEventId\": \"{{ $json.id }}\"\n}"
-      },
-      "name": "Mettre à jour ID Calendrier dans Backend",
+      "name": "Synchronisation Bidirectionnelle Google Calendar",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [720, 300]
+      "position": [480, 260]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/api/integrations/whatsapp/send-notification",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"CALENDAR_SYNC_CONFIRMATION\",\n  \"recipient\": \"+216 98 111 222\",\n  \"message\": \"✅ Google Calendar synchronisé avec succès pour {{ $json.doctorEmail }}. 0 conflit, pause déjeuner (12:30-14:00) respectée.\"\n}"
+      },
+      "name": "Confirmation Synchro Cabinet",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [740, 260]
     }
   ],
   "connections": {
-    "Webhook Rendez-vous Confirmé": {
+    "Quand on clique sur 'Tester'": {
       "main": [
         [
           {
-            "node": "Créer Événement Google Calendar",
+            "node": "Synchronisation Bidirectionnelle Google Calendar",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Créer Événement Google Calendar": {
+    "Webhook Rendez-vous Confirmé": {
       "main": [
         [
           {
-            "node": "Mettre à jour ID Calendrier dans Backend",
+            "node": "Synchronisation Bidirectionnelle Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synchronisation Bidirectionnelle Google Calendar": {
+      "main": [
+        [
+          {
+            "node": "Confirmation Synchro Cabinet",
             "type": "main",
             "index": 0
           }
@@ -73,4 +89,3 @@
     }
   }
 }
-

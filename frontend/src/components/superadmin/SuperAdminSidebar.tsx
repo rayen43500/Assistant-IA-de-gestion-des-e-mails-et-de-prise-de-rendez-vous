@@ -12,7 +12,6 @@ import {
   ShieldCheck, 
   Settings,
   Sparkles,
-  ArrowUpRight,
   LogOut,
   ChevronRight,
   X
@@ -151,19 +150,6 @@ export const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
               );
             })}
           </div>
-
-          {/* Quick exit to clinic workspace */}
-          {onExitSuperAdmin && (
-            <div className="px-3 py-2 border-t border-[#E8EDF4]">
-              <button
-                onClick={onExitSuperAdmin}
-                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/60 hover:bg-blue-100/60 text-xs font-bold text-[#2563EB] transition-colors"
-              >
-                <span>Accéder Espace Cabinet</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
 
           {/* Super Admin profile footer */}
           <div className="p-3 border-t border-[#E8EDF4] bg-[#F7F9FC] shrink-0">

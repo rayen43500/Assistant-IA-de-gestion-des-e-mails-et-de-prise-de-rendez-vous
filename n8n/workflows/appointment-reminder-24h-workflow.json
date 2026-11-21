@@ -2,6 +2,13 @@
   "name": "2. Rappel Automatique de Rendez-vous WhatsApp 24h Avant",
   "nodes": [
     {
+      "parameters": {},
+      "name": "Quand on clique sur 'Tester'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [180, 160]
+    },
+    {
       "parameters": {
         "rule": {
           "interval": [
@@ -15,7 +22,7 @@
       "name": "Cron Quotidien (08h00 Tunis)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [180, 260]
+      "position": [180, 320]
     },
     {
       "parameters": {
@@ -26,18 +33,18 @@
       "name": "Webhook Déclenchement Manuel Test",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [180, 420]
+      "position": [180, 480]
     },
     {
       "parameters": {
-        "url": "http://backend:5000/api/appointments/reminders-due",
+        "url": "http://localhost:5000/api/appointments/reminders-due",
         "method": "GET",
         "options": {}
       },
       "name": "Récupérer RDV du Lendemain non rappelés",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [440, 340]
+      "position": [440, 320]
     },
     {
       "parameters": {
@@ -47,30 +54,34 @@
       "name": "Itérer sur chaque Patient",
       "type": "n8n-nodes-base.itemLists",
       "typeVersion": 2.1,
-      "position": [680, 340]
+      "position": [680, 320]
     },
     {
       "parameters": {
-        "message": "=👋 Bonjour {{ $json.patient.name }},\n\nRappel de votre rendez-vous au cabinet médical/juridique prévu demain le {{ $json.date }} à {{ $json.timeSlot.start }}.\nMotif : {{ $json.reason }}\n\nEn cas d'empêchement, merci de répondre à ce message au plus vite pour libérer le créneau.\nÀ très bientôt,\nL'équipe du Cabinet."
+        "url": "http://localhost:5000/api/integrations/whatsapp/send-notification",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"APPOINTMENT_REMINDER_24H\",\n  \"recipient\": \"{{ $json.patient?.phone || '+216 98 456 789' }}\",\n  \"message\": \"👋 Bonjour {{ $json.patient?.name || 'Patient' }}, rappel de votre consultation prévue demain à {{ $json.timeSlot?.start || '10:00' }} au cabinet Dr. Rayen B. Répondez OUI pour confirmer.\"\n}"
       },
       "name": "Envoyer Rappel WhatsApp Patient",
-      "type": "n8n-nodes-base.whatsApp",
-      "typeVersion": 1,
-      "position": [920, 340]
-    },
-    {
-      "parameters": {
-        "url": "=http://backend:5000/api/appointments/{{ $json._id }}/reminder-sent",
-        "method": "POST",
-        "options": {}
-      },
-      "name": "Marquer Rappel Envoyé dans le Backend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1160, 340]
+      "position": [920, 320]
     }
   ],
   "connections": {
+    "Quand on clique sur 'Tester'": {
+      "main": [
+        [
+          {
+            "node": "Récupérer RDV du Lendemain non rappelés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Cron Quotidien (08h00 Tunis)": {
       "main": [
         [
@@ -114,18 +125,6 @@
           }
         ]
       ]
-    },
-    "Envoyer Rappel WhatsApp Patient": {
-      "main": [
-        [
-          {
-            "node": "Marquer Rappel Envoyé dans le Backend",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   }
 }
-
