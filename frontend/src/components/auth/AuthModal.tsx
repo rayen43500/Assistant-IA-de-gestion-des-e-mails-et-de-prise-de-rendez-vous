@@ -411,7 +411,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* Security footnote */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-2 text-[10px] text-slate-400">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Serveur connecté à <strong className="text-slate-600 font-mono">stage-cqe9.onrender.com</strong></span>
+            <span>Serveur connecté à <strong className="text-slate-600 font-mono">localhost:5000 (Mode Local)</strong></span>
           </div>
         </div>
       </div>

@@ -62,7 +62,7 @@ export const SuperAdminTopNav: React.FC<SuperAdminTopNavProps> = ({
         {/* Backend Endpoint & Cluster SLA Pill */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#F7F9FC] border border-[#E8EDF4] text-[11px] font-semibold text-slate-700">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="font-mono text-[#2563EB] font-bold">stage-cqe9.onrender.com</span>
+          <span className="font-mono text-emerald-600 font-bold">localhost:5000 (Local)</span>
           <span className="text-slate-400">• SLA 99.98%</span>
         </div>
 

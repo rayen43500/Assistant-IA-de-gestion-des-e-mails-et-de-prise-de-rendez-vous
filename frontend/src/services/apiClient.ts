@@ -1,8 +1,8 @@
 import axios from 'axios';
 import type { EmailItem, AppointmentItem } from '../types';
 
-// URL Backend : prend VITE_API_BASE_URL (https://stage-cqe9.onrender.com) avec fallback
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://stage-cqe9.onrender.com';
+// URL Backend : prend VITE_API_BASE_URL (http://localhost:5000) avec fallback local
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -219,6 +219,16 @@ export const apiSaveWhatsAppConfig = async (configData: {
 
 export const apiGetPracticeDoctors = async () => {
   const response = await apiClient.get('/api/integrations/doctors');
+  return response.data;
+};
+
+export const apiSyncGoogleCalendar = async () => {
+  const response = await apiClient.post('/api/integrations/google/sync');
+  return response.data;
+};
+
+export const apiTestIncomingEmail = async (data?: { senderName?: string; senderEmail?: string; subject?: string; body?: string }) => {
+  const response = await apiClient.post('/api/integrations/google/test-incoming-email', data || {});
   return response.data;
 };
 

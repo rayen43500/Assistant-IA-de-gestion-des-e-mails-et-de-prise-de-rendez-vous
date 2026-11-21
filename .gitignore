@@ -30,3 +30,6 @@ yarn-error.log*
 # Données locales de conteneurs
 .n8n/
 mongo_data/
+# MongoDB local database
+backend/data/db/
+backend/data/

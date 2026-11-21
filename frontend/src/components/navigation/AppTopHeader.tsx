@@ -65,7 +65,7 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({
         {/* Backend Endpoint Indicator (Hidden on small screens) */}
         <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-700">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="font-mono text-blue-600 font-bold">stage-cqe9.onrender.com</span>
+          <span className="font-mono text-emerald-600 font-bold">localhost:5000 (Local)</span>
         </div>
 
         {/* Quick Create Appointment CTA */}
