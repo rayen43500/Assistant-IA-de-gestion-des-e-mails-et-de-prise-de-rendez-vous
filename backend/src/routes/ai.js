@@ -2,6 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { protect } from '../middleware/auth.js';
 import { checkHealthAI, classifyEmailContent } from '../services/aiClient.js';
+import { evaluateBookingRequest } from '../services/smartBookingDecisionService.js';
 import Email from '../models/Email.js';
 import Appointment from '../models/Appointment.js';
 import Clinic from '../models/Clinic.js';
@@ -84,6 +85,42 @@ router.get('/daily-summary', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la génération du résumé', error: error.message });
+  }
+});
+
+// POST /api/ai/patient-chat-booking - Chat interactif de réservation intelligente pour l'Espace Patient
+router.post('/patient-chat-booking', async (req, res) => {
+  try {
+    const { message, patientInfo, selectedProfession } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ message: 'Message requis' });
+    }
+
+    const decision = await evaluateBookingRequest({
+      messageText: `${selectedProfession ? 'Profession: ' + selectedProfession + ' ' : ''}${message}`,
+      patientInfo: {
+        name: patientInfo?.name || 'Patient',
+        email: patientInfo?.email || 'patient@medilawai.com',
+        phone: patientInfo?.phone || '+216 98 123 456',
+        source: 'PATIENT_PORTAL',
+      },
+    });
+
+    return res.json({
+      success: true,
+      decision: decision.decision,
+      confirmed: decision.confirmed || false,
+      replyText: decision.message,
+      proposedSlots: decision.proposedSlots || [],
+      appointment: decision.appointment || null,
+      practitioner: decision.practitioner || null,
+      date: decision.date || null,
+      time: decision.time || null,
+    });
+  } catch (error) {
+    console.error('[Patient Chat Booking Error]:', error);
+    res.status(500).json({ message: 'Erreur traitement chat patient', error: error.message });
   }
 });
 

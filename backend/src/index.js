@@ -17,6 +17,7 @@ import integrationsRoutes from './routes/integrations.js';
 import emailRoutingRoutes from './routes/emailRouting.js';
 import publicBookingRoutes from './routes/publicBooking.js';
 import { seedInitialData } from './config/seed.js';
+import { startGmailPolling } from './services/gmailPollingService.js';
 
 dotenv.config();
 
@@ -125,7 +126,13 @@ const startServer = async () => {
     console.log(`🚀 Serveur Backend opérationnel sur le port ${PORT}`);
     console.log(`📊 Métriques Prometheus disponibles sur http://localhost:${PORT}/metrics`);
     console.log(`🩺 Health check sur http://localhost:${PORT}/health`);
+    console.log(`📧 Service Gmail centralisé activé`);
     console.log(`===================================================`);
+    try {
+      startGmailPolling();
+    } catch (pollErr) {
+      console.warn('[Gmail Polling] Démarrage différé:', pollErr.message);
+    }
   });
 
   // Tenter la connexion DB sans bloquer le serveur

@@ -17,12 +17,27 @@ const EmailSchema = new mongoose.Schema({
     ref: 'Doctor',
     index: true,
   },
+  practitionerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Doctor',
+    index: true,
+  },
   integrationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Integration',
     index: true,
   },
   providerMessageId: {
+    type: String,
+    sparse: true,
+    index: true,
+  },
+  gmailMessageId: {
+    type: String,
+    sparse: true,
+    index: true,
+  },
+  messageId: {
     type: String,
     sparse: true,
     index: true,
@@ -37,10 +52,15 @@ const EmailSchema = new mongoose.Schema({
     phone: String,
   },
   recipient: {
-    type: String, // Boîte e-mail réceptrice (ex: drrayen@gmail.com)
+    type: String, // Boîte e-mail réceptrice (ex: contact@medilawai.com)
     lowercase: true,
     trim: true,
   },
+  recipients: [{
+    type: String,
+    lowercase: true,
+    trim: true,
+  }],
   subject: {
     type: String,
     required: true,
@@ -49,6 +69,18 @@ const EmailSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  bodyText: {
+    type: String,
+  },
+  bodyHtml: {
+    type: String,
+  },
+  attachments: [{
+    filename: String,
+    contentType: String,
+    size: Number,
+    dataOrUrl: String,
+  }],
   intent: {
     type: String,
     enum: ['APPOINTMENT', 'PRICING', 'EMERGENCY', 'ADMINISTRATIVE', 'SPAM', 'UNCERTAIN', 'CANCEL', 'RESCHEDULE'],
@@ -61,9 +93,55 @@ const EmailSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PENDING_VALIDATION', 'AUTO_PROCESSED', 'VALIDATED_AND_SENT', 'MANUAL_OVERRIDE', 'ESCALATED_EMERGENCY', 'DISMISSED'],
-    default: 'PENDING_VALIDATION',
+    enum: [
+      'RECEIVED',
+      'CONTACT_IDENTIFIED',
+      'EXTERNAL_CONTACT',
+      'UNASSIGNED',
+      'NEEDS_CLARIFICATION',
+      'WAITING_FOR_REPLY',
+      'PRACTITIONER_IDENTIFIED',
+      'PROCESSING',
+      'PENDING_VALIDATION',
+      'VALIDATED',
+      'REJECTED',
+      'SENT',
+      'FAILED',
+      'ESCALATED_EMERGENCY',
+      // Maintien compatibilité
+      'AUTO_PROCESSED',
+      'VALIDATED_AND_SENT',
+      'MANUAL_OVERRIDE',
+      'DISMISSED'
+    ],
+    default: 'RECEIVED',
     index: true,
+  },
+  scenario: {
+    type: Number,
+    enum: [1, 2, 3, 4],
+    index: true,
+  },
+  contactId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Contact',
+    index: true,
+  },
+  isRegisteredContact: {
+    type: Boolean,
+    default: false,
+  },
+  practitionerIdentificationMethod: {
+    type: String,
+    enum: ['RECIPIENT_ALIAS', 'PERSONAL_LINK', 'NAME_IN_BODY', 'CLINIC_NAME', 'SPECIALTY_MATCH', 'NONE_UNASSIGNED'],
+    default: 'NONE_UNASSIGNED',
+  },
+  clarificationSent: {
+    type: Boolean,
+    default: false,
+  },
+  clarificationMessage: {
+    type: String,
   },
   processingStatus: {
     type: String,
@@ -78,6 +156,22 @@ const EmailSchema = new mongoose.Schema({
   draftReply: {
     type: String,
   },
+  aiDraft: {
+    type: String,
+  },
+  finalResponse: {
+    type: String,
+  },
+  detectedLanguage: {
+    type: String,
+    enum: ['FR', 'AR', 'EN', 'OTHER'],
+    default: 'FR',
+    index: true,
+  },
+  aiAnalysis: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+  },
   extractedEntities: {
     requestedDate: String,
     requestedTime: String,
@@ -89,6 +183,12 @@ const EmailSchema = new mongoose.Schema({
   validatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
+  },
+  validatedAt: {
+    type: Date,
+  },
+  sentAt: {
+    type: Date,
   },
   receivedAt: {
     type: Date,

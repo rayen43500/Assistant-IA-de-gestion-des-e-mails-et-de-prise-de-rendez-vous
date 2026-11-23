@@ -44,12 +44,60 @@ export const EmailWorkspace: React.FC = () => {
     if (activeFolder === 'urgent' && e.intent !== 'EMERGENCY') return false;
     if (activeFolder === 'appointments' && e.intent !== 'APPOINTMENT') return false;
     if (activeFolder === 'pricing' && e.intent !== 'PRICING') return false;
+    if (activeFolder === 'unassigned' && e.status !== 'NEEDS_CLARIFICATION' && e.status !== 'UNASSIGNED' && e.status !== 'WAITING_FOR_REPLY') return false;
+    if (activeFolder === 'sent' && e.status !== 'VALIDATED_AND_SENT' && e.status !== 'SENT') return false;
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
       return e.sender.name.toLowerCase().includes(q) || e.subject.toLowerCase().includes(q) || e.body.toLowerCase().includes(q);
     }
     return true;
   });
+
+  const simulateScenario = async (scenarioNumber: number) => {
+    try {
+      const res = await fetch('http://localhost:5000/api/emails/simulate-scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenarioNumber }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const em = data.email || data;
+        const newEmailItem: EmailItem = {
+          id: em.id || em._id || 'em-' + Date.now(),
+          sender: em.sender || { name: 'Contact Externe', email: 'contact@example.com' },
+          subject: em.subject || 'Sans objet',
+          body: em.body || em.bodyText || '',
+          receivedAt: 'À l’instant',
+          isRead: false,
+          intent: (em.intent || 'APPOINTMENT') as any,
+          priority: em.intent === 'EMERGENCY' ? 'CRITICAL' : 'MEDIUM',
+          status: em.status || 'PENDING_VALIDATION',
+          confidence: em.confidence || 0.92,
+          draftReply: em.draftReply || em.clarificationMessage || '',
+          folder: (em.status === 'WAITING_FOR_REPLY' || em.status === 'NEEDS_CLARIFICATION') ? 'unassigned' : 'inbox',
+          scenario: data.scenario || scenarioNumber,
+          isRegisteredContact: data.contact?.isRegistered || false,
+          detectedLanguage: em.detectedLanguage || 'FR',
+          recipient: 'contact@medilawai.com',
+          extractedEntities: em.extractedEntities,
+        };
+        addEmail(newEmailItem);
+        setSelectedEmailId(newEmailItem.id);
+        showToast({
+          title: `Scénario ${scenarioNumber} Injecté avec Succès !`,
+          message: data.scenarioDescription || `Message traité et orienté vers l'espace du Dr. Rayen B.`,
+          type: 'success',
+        });
+      }
+    } catch (err: any) {
+      showToast({
+        title: 'Erreur Simulation',
+        message: err.message,
+        type: 'error',
+      });
+    }
+  };
 
   const handleApprove = () => {
     if (!selectedEmail) return;
@@ -82,16 +130,49 @@ export const EmailWorkspace: React.FC = () => {
   return (
     <div className="h-[calc(100vh-7rem)] flex flex-col space-y-4">
       {/* Top action bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-[#E5EAF2]">
         <div>
-          <h1 className="text-xl font-black text-[#14213D] tracking-tight">Boîte de Réception & Tri IA</h1>
-          <p className="text-xs text-slate-500">Classification NLP automatique en 5 catégories et validation Human-in-the-Loop</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-black text-[#14213D] tracking-tight">Messagerie Centralisée MediLawAI</h1>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Boîte Centrale Unique
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Réception & Envoi : <span className="font-semibold text-blue-600">contact@medilawai.com</span> • Espace sécurisé : <span className="font-semibold text-slate-700">Dr. Rayen B.</span>
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500">
-            Total : {filteredEmails.length} messages
-          </span>
+        <div className="flex items-center flex-wrap gap-1.5">
+          <span className="text-[11px] font-bold text-slate-500 mr-1">Tester Scénario :</span>
+          <button
+            onClick={() => simulateScenario(1)}
+            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-all border border-blue-200"
+            title="Scénario 1 : Patient inscrit + Médecin identifié"
+          >
+            1. Inscrit + Médecin
+          </button>
+          <button
+            onClick={() => simulateScenario(2)}
+            className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold transition-all border border-purple-200"
+            title="Scénario 2 : Patient non inscrit (externe) + Médecin identifié"
+          >
+            2. Externe + Médecin
+          </button>
+          <button
+            onClick={() => simulateScenario(3)}
+            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-xs font-bold transition-all border border-amber-200"
+            title="Scénario 3 : Patient inscrit + Médecin inconnu (Clarification)"
+          >
+            3. Inscrit + Inconnu
+          </button>
+          <button
+            onClick={() => simulateScenario(4)}
+            className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-bold transition-all border border-rose-200"
+            title="Scénario 4 : Patient non inscrit + Médecin inconnu (Clarification sans compte)"
+          >
+            4. Externe + Inconnu
+          </button>
         </div>
       </div>
 
@@ -132,7 +213,8 @@ export const EmailWorkspace: React.FC = () => {
               { id: 'pending', label: 'À Valider (Human)', icon: Clock, count: emails.filter(e => e.status === 'PENDING_VALIDATION').length, highlight: true },
               { id: 'urgent', label: 'Urgences SAMU 190', icon: AlertTriangle, count: emails.filter(e => e.intent === 'EMERGENCY').length, urgent: true },
               { id: 'appointments', label: 'Demandes de RDV', icon: Calendar, count: emails.filter(e => e.intent === 'APPOINTMENT').length },
-              { id: 'pricing', label: 'Tarifs & CNAM', icon: FileText, count: emails.filter(e => e.intent === 'PRICING').length },
+              { id: 'unassigned', label: 'Non Attribués / Clarif', icon: MessageSquare, count: emails.filter(e => e.status === 'NEEDS_CLARIFICATION' || e.status === 'WAITING_FOR_REPLY' || e.status === 'UNASSIGNED').length },
+              { id: 'sent', label: 'Envoyés (Central)', icon: Send, count: emails.filter(e => e.status === 'VALIDATED_AND_SENT' || e.status === 'SENT').length },
             ].map(folder => {
               const Icon = folder.icon;
               const isActive = activeFolder === folder.id;
@@ -256,17 +338,39 @@ export const EmailWorkspace: React.FC = () => {
             <div className="border-b border-[#E5EAF2] pb-4 space-y-3">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-black text-[#14213D]">{selectedEmail.subject}</h2>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h2 className="text-lg font-black text-[#14213D]">{selectedEmail.subject}</h2>
+                    {selectedEmail.scenario && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">
+                        Scénario {selectedEmail.scenario}
+                      </span>
+                    )}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      selectedEmail.isRegisteredContact
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-purple-100 text-purple-800'
+                    }`}>
+                      {selectedEmail.isRegisteredContact ? 'Patient Inscrit' : 'Contact Externe (Non inscrit)'}
+                    </span>
+                    {selectedEmail.detectedLanguage && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                        Langue : {selectedEmail.detectedLanguage}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
                     <span className="font-semibold text-slate-800">{selectedEmail.sender.name}</span>
                     <span>&lt;{selectedEmail.sender.email}&gt;</span>
+                    <span className="text-slate-400">vers</span>
+                    <span className="font-semibold text-blue-600">contact@medilawai.com</span>
                     {selectedEmail.sender.phone && (
                       <span className="text-blue-600 font-semibold">• {selectedEmail.sender.phone}</span>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                     Confiance IA : {(selectedEmail.confidence * 100).toFixed(0)}%
                   </span>
@@ -362,7 +466,7 @@ export const EmailWorkspace: React.FC = () => {
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition-all"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>Valider & Envoyer Maintenant</span>
+                    <span>Valider & Expédier via contact@medilawai.com</span>
                   </button>
                 </div>
               </div>

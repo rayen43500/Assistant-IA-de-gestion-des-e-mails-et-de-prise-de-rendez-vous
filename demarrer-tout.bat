@@ -12,6 +12,9 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
+echo 1.1 Synchronisation des 5 Workflows n8n (Master + 4 Flux)...
+node --experimental-sqlite scripts/sync-n8n-db.js >nul 2>&1
+
 echo 2. Demarrage du Microservice IA Deep Learning (Port 8000)...
 start "MediLawAI - Service IA" cmd /k "node ai-service/server.js"
 

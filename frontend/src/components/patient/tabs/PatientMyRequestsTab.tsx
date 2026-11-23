@@ -8,9 +8,11 @@ import {
   Sparkles, 
   Plus, 
   User,
-  HelpCircle
+  HelpCircle,
+  Calendar
 } from 'lucide-react';
 import { useAppStore } from '../../../stores/useAppStore';
+import { PatientAiBookingChat } from './PatientAiBookingChat';
 
 export const PatientMyRequestsTab: React.FC = () => {
   const { ingestNewEmail, showToast } = useAppStore();
@@ -37,6 +39,8 @@ export const PatientMyRequestsTab: React.FC = () => {
       answeredBy: 'Secrétariat Médical'
     }
   ]);
+
+  const [activeMode, setActiveMode] = useState<'CHAT_BOOKING' | 'MESSAGE_FORM'>('CHAT_BOOKING');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,14 +78,46 @@ export const PatientMyRequestsTab: React.FC = () => {
 
   return (
     <div className="space-y-6 font-sans">
-      <div>
-        <h1 className="text-xl font-black text-[#14213D] tracking-tight">Mes Demandes & Messages au Cabinet</h1>
-        <p className="text-xs text-slate-500">
-          Posez vos questions administratives, demandez des précisions sur vos ordonnances ou les prises en charge CNAM
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-black text-[#14213D] tracking-tight">Mes Échanges & Prise de Rendez-vous IA</h1>
+          <p className="text-xs text-slate-500">
+            Demandez un rendez-vous direct par chat intelligent ou posez vos questions au secrétariat
+          </p>
+        </div>
+
+        {/* Mode Selector */}
+        <div className="flex items-center bg-white p-1 rounded-2xl border border-slate-200 shadow-2xs self-start sm:self-auto">
+          <button
+            onClick={() => setActiveMode('CHAT_BOOKING')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeMode === 'CHAT_BOOKING'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span>Chat RDV Intelligent</span>
+          </button>
+          <button
+            onClick={() => setActiveMode('MESSAGE_FORM')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeMode === 'MESSAGE_FORM'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Message Classique</span>
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Render Active Mode */}
+      {activeMode === 'CHAT_BOOKING' ? (
+        <PatientAiBookingChat />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Form to submit a new question (1 Col) */}
         <div className="bg-white rounded-3xl border border-[#E8EDF4] shadow-xs p-6 space-y-4">
           <h2 className="text-sm font-bold text-[#14213D] flex items-center gap-2">
@@ -161,6 +197,7 @@ export const PatientMyRequestsTab: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };

@@ -548,21 +548,44 @@ router.get('/google/callback', async (req, res) => {
 
     const encryptedCredentials = encryptData(credentialsToEncrypt);
 
-    // Mettre à jour ou créer l'intégration pour ce médecin
-    const integration = await Integration.findOneAndUpdate(
-      { tenantId, doctorId, provider: 'GOOGLE' },
-      {
-        providerAccountEmail: googleAccountEmail,
-        encryptedCredentialReference: encryptedCredentials,
-        calendarId: 'primary',
+    // ✅ Sauvegarde garantie dans le fichier JSON (sans MongoDB)
+    writeLocalIntegrationsConfig({
+      googleWorkspace: {
+        ...(readLocalIntegrationsConfig().googleWorkspace || {}),
+        doctorEmail: googleAccountEmail,
         connectionStatus: 'CONNECTED',
-        scopes: tokenData.scope ? tokenData.scope.split(' ') : [],
-        tokenExpiration: new Date(Date.now() + tokenData.expires_in * 1000),
-        lastSynchronization: new Date(),
-        lastError: null,
-      },
-      { upsert: true, new: true }
-    );
+        isConfigured: true,
+        hasSecret: true,
+        lastSyncAt: new Date().toISOString(),
+        // Tokens chiffrés stockés en fichier
+        encryptedTokens: encryptedCredentials,
+        tokenExpiry: Date.now() + (tokenData.expires_in * 1000),
+      }
+    });
+
+    // Essayer aussi MongoDB si disponible (optionnel)
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await Integration.findOneAndUpdate(
+          { tenantId, doctorId, provider: 'GOOGLE' },
+          {
+            providerAccountEmail: googleAccountEmail,
+            encryptedCredentialReference: encryptedCredentials,
+            calendarId: 'primary',
+            connectionStatus: 'CONNECTED',
+            scopes: tokenData.scope ? tokenData.scope.split(' ') : [],
+            tokenExpiration: new Date(Date.now() + tokenData.expires_in * 1000),
+            lastSynchronization: new Date(),
+            lastError: null,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (dbErr) {
+        console.warn('MongoDB non disponible, tokens sauvegardés dans fichier uniquement:', dbErr.message);
+      }
+    }
+
+    console.log(`✅ Gmail OAuth connecté pour ${googleAccountEmail} - polling démarré`);
 
     // Redirection vers le frontend vers la page des intégrations
     const frontendRedirect = process.env.FRONTEND_URL || 'http://localhost:5173';

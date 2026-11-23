@@ -4,6 +4,9 @@ import Clinic from '../models/Clinic.js';
 import AuditLog from '../models/AuditLog.js';
 import { protect } from '../middleware/auth.js';
 import { classifyEmailContent } from '../services/aiClient.js';
+import { processIncomingEmail } from '../services/centralEmailRouter.js';
+import EmailThread from '../models/EmailThread.js';
+import Contact from '../models/Contact.js';
 
 const router = express.Router();
 
@@ -31,84 +34,113 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
-// POST /api/emails/ingest - Ingestion d'un e-mail (appelé par n8n ou simulation)
+// POST /api/emails/ingest - Ingestion d'un e-mail via l'architecture centralisée
 router.post('/ingest', async (req, res) => {
   try {
-    const { sender, subject, body } = req.body;
-
-    // Appel du microservice IA (Port 8000) pour classification et extraction d'entités
-    const aiResult = await classifyEmailContent({
+    const {
+      sender,
+      senderName,
+      senderEmail,
+      from,
+      recipient,
+      to,
       subject,
       body,
-      clinicType: 'MEDICAL',
-    });
+      threadId,
+      gmailMessageId,
+      receivedAt
+    } = req.body;
 
-    const isEmergency = aiResult.intent === 'EMERGENCY';
-    const confidence = aiResult.confidence || 0.5;
-    const threshold = 0.85;
+    const emailOfSender = senderEmail || sender?.email || from || 'patient@example.com';
+    const nameOfSender = senderName || sender?.name || '';
+    const targetRecipient = recipient || to || 'contact@medilawai.com';
 
-    let initialStatus = 'PENDING_VALIDATION';
-    if (isEmergency) {
-      initialStatus = 'ESCALATED_EMERGENCY';
-    } else if (confidence >= threshold && aiResult.intent !== 'SPAM') {
-      initialStatus = 'AUTO_PROCESSED';
-    }
-
-    let createdId = 'em-' + Date.now();
-    let newEmail = {
-      _id: createdId,
-      id: createdId,
-      clinicId: '66f1234567890abcdef12345',
-      sender: {
-        name: sender?.name || 'Patient Inconnu',
-        email: sender?.email || 'patient@example.com',
-      },
+    // Exécution du moteur centralisé MediLawAI (8 étapes et 4 scénarios)
+    const result = await processIncomingEmail({
+      senderEmail: emailOfSender,
+      senderName: nameOfSender,
+      recipient: targetRecipient,
       subject: subject || 'Sans objet',
       body: body || '',
-      intent: aiResult.intent,
-      confidence: aiResult.confidence,
-      draftReply: aiResult.suggestedReply || '',
-      extractedEntities: aiResult.extractedEntities || {},
-      status: initialStatus,
-      processedAt: new Date(),
-      receivedAt: new Date()
-    };
+      threadId: threadId || null,
+      gmailMessageId: gmailMessageId || null,
+      receivedAt: receivedAt || new Date(),
+    });
 
-    if (Email.db?.readyState === 1) {
-      try {
-        const dbEmail = await Email.create({
-          clinicId: '66f1234567890abcdef12345',
-          sender: newEmail.sender,
-          subject: newEmail.subject,
-          body: newEmail.body,
-          intent: newEmail.intent,
-          confidence: newEmail.confidence,
-          draftReply: newEmail.draftReply,
-          extractedEntities: newEmail.extractedEntities,
-          status: newEmail.status,
-          processedAt: newEmail.processedAt,
-        });
-        if (dbEmail) newEmail = dbEmail;
+    return res.status(201).json(result.email || result);
+  } catch (error) {
+    console.error('[Emails Ingest Error]:', error);
+    res.status(500).json({ message: 'Erreur lors de l’ingestion de l’e-mail', error: error.message });
+  }
+});
 
-        await AuditLog.create({
-          clinicId: '66f1234567890abcdef12345',
-          action: 'EMAIL_INGESTED_AND_CLASSIFIED',
-          resource: 'Email',
-          resourceId: String(newEmail._id),
-          details: {
-            intent: aiResult.intent,
-            confidence: aiResult.confidence,
-            status: initialStatus,
-          },
-        });
-      } catch (dbErr) {
-        // Enregistrement différé sécurisé
-      }
+// POST /api/emails/simulate-scenario - Test instantané des 4 scénarios MediLawAI
+router.post('/simulate-scenario', async (req, res) => {
+  try {
+    const { scenarioNumber = 1 } = req.body;
+    let payload = {};
+
+    switch (Number(scenarioNumber)) {
+      case 1:
+        // Scénario 1 : Patient inscrit + Praticien identifié
+        payload = {
+          senderEmail: 'ahmed.benali@gmail.com',
+          senderName: 'Ahmed Ben Ali',
+          recipient: 'contact@medilawai.com',
+          subject: 'Demande de consultation cardiologie – Dr. Rayen',
+          body: 'Bonjour Docteur Rayen B., je ressens des essoufflements à l’effort et souhaiterais une consultation de suivi ce vendredi si possible.',
+        };
+        break;
+      case 2:
+        // Scénario 2 : Patient non inscrit (externe) + Praticien identifié
+        payload = {
+          senderEmail: 'nouveau.patient.' + Date.now() + '@yahoo.fr',
+          senderName: 'Salma Mansour',
+          recipient: 'contact@medilawai.com',
+          subject: 'Première consultation avec Dr. Rayen',
+          body: 'Bonjour, on m’a vivement recommandé le Dr. Rayen B. pour un contrôle cardiologique. Avez-vous un créneau lundi prochain ?',
+        };
+        break;
+      case 3:
+        // Scénario 3 : Patient inscrit + Praticien inconnu (demande de clarification)
+        payload = {
+          senderEmail: 'ahmed.benali@gmail.com',
+          senderName: 'Ahmed Ben Ali',
+          recipient: 'contact@medilawai.com',
+          subject: 'Demande de rendez-vous médical',
+          body: 'Bonjour, je voudrais prendre un rendez-vous pour une consultation la semaine prochaine s’il vous plaît.',
+        };
+        break;
+      case 4:
+      default:
+        // Scénario 4 : Patient non inscrit + Praticien inconnu (demande de clarification sans inscription)
+        payload = {
+          senderEmail: 'visiteur.anonyme.' + Date.now() + '@gmail.com',
+          senderName: 'Visiteur Inconnu',
+          recipient: 'contact@medilawai.com',
+          subject: 'Besoin d’un rendez-vous',
+          body: 'Bonjour, j’ai besoin d’une consultation rapidement mais je ne connais pas les spécialistes disponibles dans votre cabinet.',
+        };
+        break;
     }
 
-    return res.status(201).json(newEmail);
+    const result = await processIncomingEmail(payload);
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ message: 'Erreur lors de l’ingestion de l’e-mail', error: error.message });
+    res.status(500).json({ message: 'Erreur lors de la simulation du scénario', error: error.message });
+  }
+});
+
+// GET /api/emails/threads/:threadId - Récupère l'historique complet d'une conversation
+router.get('/threads/:threadId', async (req, res) => {
+  try {
+    const thread = await EmailThread.findOne({ threadId: req.params.threadId }).populate('emails');
+    if (!thread) {
+      return res.status(404).json({ message: 'Fil de discussion non trouvé' });
+    }
+    res.json(thread);
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur récupération thread', error: error.message });
   }
 });
 

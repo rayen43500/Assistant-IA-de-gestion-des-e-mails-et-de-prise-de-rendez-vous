@@ -1,5 +1,5 @@
 {
-  "name": "2. Rappel Automatique de Rendez-vous WhatsApp 24h Avant",
+  "name": "2. Rappels Automatiques 24h Avant RDV (Gmail Garanti + WhatsApp Optionnel)",
   "nodes": [
     {
       "parameters": {},
@@ -58,16 +58,41 @@
     },
     {
       "parameters": {
+        "url": "http://localhost:5000/api/appointments/send-reminder",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"appointmentId\": \"{{ $json._id || 'mock_app_1' }}\",\n  \"patient\": {\n    \"name\": \"{{ $json.patient?.name || 'Patient' }}\",\n    \"email\": \"{{ $json.patient?.email || 'patient@example.tn' }}\",\n    \"phone\": \"{{ $json.patient?.phone || '+216 98 456 789' }}\"\n  },\n  \"date\": \"{{ $json.date || 'demain' }}\",\n  \"timeSlot\": {\n    \"start\": \"{{ $json.timeSlot?.start || '09:30' }}\"\n  }\n}"
+      },
+      "name": "1. Envoyer Rappel E-mail (Gmail Prioritaire)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [920, 320]
+    },
+    {
+      "parameters": {
         "url": "http://localhost:5000/api/integrations/whatsapp/send-notification",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"type\": \"APPOINTMENT_REMINDER_24H\",\n  \"recipient\": \"{{ $json.patient?.phone || '+216 98 456 789' }}\",\n  \"message\": \"👋 Bonjour {{ $json.patient?.name || 'Patient' }}, rappel de votre consultation prévue demain à {{ $json.timeSlot?.start || '10:00' }} au cabinet Dr. Rayen B. Répondez OUI pour confirmer.\"\n}"
+        "jsonBody": "={\n  \"type\": \"APPOINTMENT_REMINDER_24H\",\n  \"recipient\": \"{{ $json.email?.recipient || '+216 98 456 789' }}\",\n  \"message\": \"👋 Rappel consultation cabinet Dr. Rayen B. prévu demain. (Notification WhatsApp Optionnelle)\"\n}"
       },
-      "name": "Envoyer Rappel WhatsApp Patient",
+      "name": "2. Notification WhatsApp (Optionnelle)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [920, 320]
+      "onError": "continueRegularOutput",
+      "position": [1160, 320]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/api/appointments/mock_app_1/reminder-sent",
+        "method": "POST",
+        "options": {}
+      },
+      "name": "3. Consigner Rappel Envoyé dans l'Agenda",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1400, 320]
     }
   ],
   "connections": {
@@ -119,7 +144,29 @@
       "main": [
         [
           {
-            "node": "Envoyer Rappel WhatsApp Patient",
+            "node": "1. Envoyer Rappel E-mail (Gmail Prioritaire)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Envoyer Rappel E-mail (Gmail Prioritaire)": {
+      "main": [
+        [
+          {
+            "node": "2. Notification WhatsApp (Optionnelle)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Notification WhatsApp (Optionnelle)": {
+      "main": [
+        [
+          {
+            "node": "3. Consigner Rappel Envoyé dans l'Agenda",
             "type": "main",
             "index": 0
           }

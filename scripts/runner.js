@@ -7,13 +7,22 @@
  * 4. Frontend Vite (Port 5173)
  */
 
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
+
+// Synchronisation des workflows n8n dans la base SQLite locale
+try {
+  console.log('[Suite] Synchronisation des 5 workflows n8n (Master + 4 spécialisés)...');
+  execSync('node --experimental-sqlite scripts/sync-n8n-db.js', { cwd: rootDir, stdio: 'ignore' });
+  console.log('[Suite] ✅ Workflows n8n synchronisés sans erreur.');
+} catch (e) {
+  console.warn('[Suite] Avertissement sync n8n :', e.message);
+}
 
 const isWindows = process.platform === 'win32';
 const npmCmd = isWindows ? 'npm.cmd' : 'npm';

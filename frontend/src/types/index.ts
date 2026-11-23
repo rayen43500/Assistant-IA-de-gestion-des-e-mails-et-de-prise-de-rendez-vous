@@ -21,12 +21,16 @@ export interface EmailItem {
   body: string;
   receivedAt: string;
   isRead: boolean;
-  intent: 'APPOINTMENT' | 'PRICING' | 'ADMINISTRATIVE' | 'EMERGENCY' | 'SPAM' | 'GENERAL' | 'DOCUMENT';
+  intent: 'APPOINTMENT' | 'PRICING' | 'ADMINISTRATIVE' | 'EMERGENCY' | 'SPAM' | 'GENERAL' | 'DOCUMENT' | 'CANCELLATION' | 'INFORMATION' | 'OTHER';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  status: 'PENDING_VALIDATION' | 'VALIDATED_AND_SENT' | 'AUTO_PROCESSED' | 'ESCALATED_EMERGENCY' | 'DISMISSED';
+  status: 'PENDING_VALIDATION' | 'VALIDATED_AND_SENT' | 'AUTO_PROCESSED' | 'ESCALATED_EMERGENCY' | 'DISMISSED' | 'RECEIVED' | 'CONTACT_IDENTIFIED' | 'EXTERNAL_CONTACT' | 'UNASSIGNED' | 'NEEDS_CLARIFICATION' | 'WAITING_FOR_REPLY' | 'PRACTITIONER_IDENTIFIED' | 'PROCESSING' | 'VALIDATED' | 'REJECTED' | 'SENT' | 'FAILED';
   confidence: number;
   draftReply: string;
-  folder: 'inbox' | 'sent' | 'drafts' | 'archive' | 'spam' | 'urgent';
+  folder: 'inbox' | 'sent' | 'drafts' | 'archive' | 'spam' | 'urgent' | 'unassigned';
+  scenario?: number;
+  isRegisteredContact?: boolean;
+  detectedLanguage?: 'FR' | 'AR' | 'EN';
+  recipient?: string;
   extractedEntities?: {
     requestedDate?: string;
     requestedTime?: string;

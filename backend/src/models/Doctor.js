@@ -19,6 +19,35 @@ const DoctorSchema = new mongoose.Schema({
     required: true,
     trim: true,
   },
+  firstName: {
+    type: String,
+    trim: true,
+  },
+  lastName: {
+    type: String,
+    trim: true,
+  },
+  profession: {
+    type: String,
+    enum: ['MEDECIN', 'AVOCAT', 'NOTAIRE', 'AUTRE'],
+    default: 'MEDECIN',
+    index: true,
+  },
+  receptionAliases: [{
+    type: String,
+    lowercase: true,
+    trim: true,
+  }],
+  publicContactId: {
+    type: String,
+    trim: true,
+    index: true,
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true,
+  },
   professionalEmail: {
     type: String,
     required: true,

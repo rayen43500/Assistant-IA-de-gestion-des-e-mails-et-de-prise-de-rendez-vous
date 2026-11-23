@@ -134,79 +134,117 @@ def check_prompt_injection(text: str) -> bool:
 # 3. MOTEUR DE CLASSIFICATION NLP & EXTRACTION
 # ==========================================
 
+# Mots-clés multilingues (Français, Arabe, Anglais)
 KEYWORDS_EMERGENCY = [
+    # Français
     "urgent", "urgence", "douleur aiguë", "poitrine", "inconscient", "sang", 
     "infarctus", "étouffement", "hémorragie", "danger", "perte de connaissance",
-    "garde à vue", "mandat d'arrêt", "saisie immédiate"
+    "samu", "garde à vue", "mandat d'arrêt", "saisie immédiate",
+    # Arabe
+    "طوارئ", "عاجل", "نزيف", "ألم حاد", "صدر", "إغماء", "خطر", "اسعاف", "مستعجل",
+    # Anglais
+    "emergency", "urgent", "chest pain", "bleeding", "unconscious", "heart attack", "danger"
 ]
 
 KEYWORDS_APPOINTMENT = [
+    # Français
     "rendez-vous", "rdv", "créneau", "consultation", "disponibilité", 
-    "programmer", "déplacer", "annuler", "réserver", "jeudi", "vendredi", "demain"
+    "programmer", "réserver", "consulter", "créneaux",
+    # Arabe
+    "موعد", "حجز", "زيارة", "استشارة", "طبيب", "عيادة",
+    # Anglais
+    "appointment", "schedule", "book", "consultation", "slot", "visit"
 ]
 
-KEYWORDS_PRICING = [
-    "tarif", "prix", "honoraires", "coût", "combien", "remboursement", "cnam", "devis"
+KEYWORDS_CANCELLATION = [
+    # Français
+    "annuler", "annulation", "reporter", "déplacer", "annule mon rdv", "pas disponible",
+    # Arabe
+    "إلغاء", "الغاء", "تأجيل", "تغيير الموعد",
+    # Anglais
+    "cancel", "cancellation", "reschedule", "postpone"
 ]
 
-KEYWORDS_ADMIN = [
-    "attestation", "certificat", "facture", "dossier", "duplicata", 
-    "feuille de soins", "ordonnance", "pièce", "justificatif"
+KEYWORDS_INFORMATION = [
+    # Français
+    "information", "renseignement", "tarif", "prix", "honoraires", "horaires", "adresse", "accès", "question",
+    # Arabe
+    "معلومات", "استفسار", "سعر", "أوقات العمل", "عنوان",
+    # Anglais
+    "information", "inquiry", "question", "pricing", "fees", "hours", "location"
 ]
 
 KEYWORDS_SPAM = [
-    "offre exceptionnelle", "gratuit", "promo", "crypto", "gagnez", "casino", "viagra", "-50%"
+    "offre exceptionnelle", "gratuit", "promo", "crypto", "gagnez", "casino", "viagra", "-50%",
+    "free money", "winner", "lottery"
 ]
 
 
 def classify_text(subject: str, body: str, clinic_type: str = "MEDICAL"):
     full_text = f"{subject} {body}".lower()
 
+    # Détection de langue simplifiée
+    is_arabic = bool(re.search(r"[\u0600-\u06FF]", f"{subject} {body}"))
+    is_english = any(w in full_text for w in ["appointment", "urgent", "please", "cancel", "doctor", "schedule"])
+
     # Vérification sécurité injection
     if check_prompt_injection(full_text):
-        return "SPAM", 0.99, "Tentative d'injection bloquée par le pare-feu IA DevSecOps.", []
+        return "OTHER", 0.99, "Tentative d'injection bloquée par le pare-feu IA DevSecOps.", []
 
-    # 1. Détection Prioritaire d'Urgence (Safety First)
+    # 1. EMERGENCY
     urgencies_found = [k for k in KEYWORDS_EMERGENCY if k in full_text]
     if urgencies_found:
-        reply = (
-            "🚨 ALERTE URGENCE : Si votre état présente un risque vital immédiat, "
-            "contactez sans délai le SAMU Tunisie au 190 / 198 ou rendez-vous au service d'urgences hospitalières le plus proche. "
-            "Notre secrétariat a été notifié en priorité absolue."
-        )
+        if is_arabic:
+            reply = "🚨 تنبيه طارئ: إذا كانت حالتكم تمثل خطراً على الحياة، يرجى الاتصال فوراً بالإسعاف على الرقم 190 أو التوجه لأقرب مستشفى. تم إشعار الفريق الطبي بأعلى أولوية."
+        elif is_english:
+            reply = "🚨 EMERGENCY ALERT: If you are experiencing a life-threatening emergency, please call 15/190 or go to the nearest emergency room immediately. Our on-duty medical staff has been alerted with highest priority."
+        else:
+            reply = (
+                "🚨 ALERTE URGENCE : Si votre état présente un risque vital immédiat, "
+                "contactez sans délai le SAMU au 15 (ou 190) ou rendez-vous au service d'urgences le plus proche. "
+                "Notre équipe a été notifiée en priorité absolue."
+            )
         return "EMERGENCY", 0.98, reply, urgencies_found
 
-    # 2. Spam
-    if any(k in full_text for k in KEYWORDS_SPAM):
-        return "SPAM", 0.95, "", []
+    # 2. CANCELLATION
+    if any(k in full_text for k in KEYWORDS_CANCELLATION):
+        if is_arabic:
+            reply = "مرحباً، تم تسجيل طلب إلغاء أو تعديل الموعد. سيقوم الفريق بتأكيد التعديل في أقرب وقت."
+        elif is_english:
+            reply = "Hello, your appointment cancellation or rescheduling request has been noted. We will confirm shortly."
+        else:
+            reply = "Bonjour,\n\nVotre demande d'annulation ou de report de rendez-vous a bien été prise en compte. Le praticien et notre secrétariat en sont informés.\n\nBien cordialement."
+        return "CANCELLATION", 0.94, reply, []
 
-    # 3. Rendez-vous
+    # 3. APPOINTMENT
     if any(k in full_text for k in KEYWORDS_APPOINTMENT):
-        reply = (
-            "Bonjour,\n\nNous avons bien reçu votre demande de rendez-vous. "
-            "Nos disponibilités ont été vérifiées et un créneau adapté peut vous être réservé. "
-            "Notre secrétariat confirme la date demandée.\n\nBien cordialement,\nLe secrétariat du cabinet"
-        )
+        if is_arabic:
+            reply = "مرحباً، تلقينا طلبكم لحجز موعد. يتم التحقق من الأوقات المتاحة لتأكيد الموعد المناسب لكم."
+        elif is_english:
+            reply = "Hello, thank you for reaching out. We have received your booking request and will confirm available slots shortly."
+        else:
+            reply = (
+                "Bonjour,\n\nNous avons bien reçu votre demande de rendez-vous. "
+                "Nos disponibilités ont été vérifiées et un créneau adapté peut vous être réservé. "
+                "Notre secrétariat confirme la date demandée.\n\nBien cordialement,\nLe secrétariat du cabinet"
+            )
         return "APPOINTMENT", 0.94, reply, []
 
-    # 4. Tarifs
-    if any(k in full_text for k in KEYWORDS_PRICING):
-        reply = (
-            "Bonjour,\n\nNos honoraires sont conformes aux conventions en vigueur en Tunisie avec prise en charge et feuille de soins CNAM. "
-            "N'hésitez pas à consulter notre grille ou contacter le cabinet pour toute précision.\n\nBien cordialement."
-        )
-        return "PRICING", 0.92, reply, []
+    # 4. INFORMATION
+    if any(k in full_text for k in KEYWORDS_INFORMATION):
+        if is_arabic:
+            reply = "مرحباً، شكراً على تواصلكم. لقد تم تسجيل استفساركم وسنجيبكم بالتفاصيل المطلوبة قريباً."
+        elif is_english:
+            reply = "Hello, thank you for your inquiry. Our team has received your questions and will provide the requested information promptly."
+        else:
+            reply = (
+                "Bonjour,\n\nNous vous remercions pour votre demande d'informations. "
+                "Notre équipe étudie votre requête et vous apportera une réponse détaillée dans les meilleurs délais.\n\nCordialement."
+            )
+        return "INFORMATION", 0.92, reply, []
 
-    # 5. Administratif
-    if any(k in full_text for k in KEYWORDS_ADMIN):
-        reply = (
-            "Bonjour,\n\nVotre demande de document administratif a bien été enregistrée. "
-            "Elle est transmise à la secrétaire pour préparation et délivrance.\n\nCordialement."
-        )
-        return "ADMINISTRATIVE", 0.91, reply, []
-
-    # Défaut
-    return "UNCERTAIN", 0.65, "Bonjour, nous accusons réception de votre message et y répondrons dans les meilleurs délais.", []
+    # 5. OTHER
+    return "OTHER", 0.70, "Bonjour, nous accusons réception de votre message et y répondrons dans les meilleurs délais.", []
 
 
 def extract_entities_from_text(text: str) -> ExtractedEntities:

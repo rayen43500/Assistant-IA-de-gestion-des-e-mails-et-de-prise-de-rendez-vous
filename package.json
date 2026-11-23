@@ -1,6 +1,7 @@
 {
   "name": "ai-cabinet-assistant-suite",
   "version": "1.0.0",
+  "type": "module",
   "description": "Assistant IA de gestion des e-mails et de prise de rendez-vous pour cabinets médicaux et juridiques (Tunisie 2026)",
   "private": true,
   "scripts": {

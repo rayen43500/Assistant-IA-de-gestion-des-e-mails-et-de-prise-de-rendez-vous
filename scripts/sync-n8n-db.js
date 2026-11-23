@@ -95,5 +95,16 @@ if (existingMaster) {
   console.log(`Inserted Master workflow ${masterId}`);
 }
 
+// Ensure all workflows are in shared_workflow
+const defaultProject = db.prepare('SELECT id FROM project LIMIT 1').get();
+const projectId = defaultProject ? defaultProject.id : 'cO8YzGq4VQ0cDfSS';
+const allIds = [masterId, ...updates.map(u => u.id)];
+for (const wId of allIds) {
+  db.prepare(`
+    INSERT OR REPLACE INTO shared_workflow (workflowId, projectId, role, createdAt, updatedAt)
+    VALUES (?, ?, 'workflow:owner', ?, ?)
+  `).run(wId, projectId, now, now);
+}
+
 const all = db.prepare('SELECT id, name, updatedAt FROM workflow_entity').all();
 console.log('All workflows in n8n database:', all);
