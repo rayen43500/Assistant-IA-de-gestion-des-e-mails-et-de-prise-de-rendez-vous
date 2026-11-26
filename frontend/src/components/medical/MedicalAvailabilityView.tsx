@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
-import { 
-  Calendar, 
-  Clock, 
-  CheckCircle2, 
-  Plus, 
-  Trash2, 
-  AlertCircle, 
-  Save, 
-  Globe, 
-  Coffee, 
+import React, { useState, useEffect } from 'react';
+import { apiClient, apiErrorMessage, DEMO_MODE } from '../../services/apiClient';
+import {
+  Calendar,
+  Clock,
+  CheckCircle2,
+  Plus,
+  Trash2,
+  AlertCircle,
+  Save,
+  Globe,
+  Coffee,
   ShieldCheck,
   Zap,
   ToggleLeft,
@@ -28,6 +29,42 @@ export const MedicalAvailabilityView: React.FC = () => {
   const [daysSchedule, setDaysSchedule] = useState(availabilitySettings.daysSchedule);
   const [unavailablePeriods, setUnavailablePeriods] = useState(availabilitySettings.unavailablePeriods);
 
+  const [saving, setSaving] = useState(false);
+  const [doctorName, setDoctorName] = useState('');
+
+  // Chargement des horaires réels (ceux utilisés par l'IA pour réserver)
+  useEffect(() => {
+    apiClient.get('/api/schedule/me').then(({ data }) => {
+      setOnlineBookingEnabled(data.onlineBookingEnabled);
+      setConsultationDuration(data.consultationDuration);
+      setBufferTime(data.bufferTime);
+      setDaysSchedule(data.daysSchedule);
+      setUnavailablePeriods(data.unavailablePeriods);
+      setDoctorName(data.doctorName || '');
+      updateAvailabilitySettings(data);
+    }).catch((err) => {
+      if (!DEMO_MODE) showToast({ title: 'Horaires indisponibles', message: apiErrorMessage(err), type: 'warning' });
+    });
+  }, []);
+
+  // Enregistrement serveur (source de vérité du moteur de réservation)
+  const persist = async (patch: Record<string, unknown> = {}) => {
+    const payload = { onlineBookingEnabled, consultationDuration, bufferTime, daysSchedule, unavailablePeriods, ...patch };
+    if (DEMO_MODE) { updateAvailabilitySettings(payload as any); return true; }
+    setSaving(true);
+    try {
+      const { data } = await apiClient.put('/api/schedule/me', payload);
+      updateAvailabilitySettings(data);
+      setUnavailablePeriods(data.unavailablePeriods);
+      return true;
+    } catch (err: any) {
+      showToast({ title: 'Non enregistré', message: apiErrorMessage(err), type: 'danger' });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const [newPeriodTitle, setNewPeriodTitle] = useState('');
   const [newPeriodStart, setNewPeriodStart] = useState('');
   const [newPeriodEnd, setNewPeriodEnd] = useState('');
@@ -40,9 +77,13 @@ export const MedicalAvailabilityView: React.FC = () => {
     setDaysSchedule(prev => prev.map((d, i) => i === idx ? { ...d, [field]: val } : d));
   };
 
-  const handleAddUnavailable = (e: React.FormEvent) => {
+  const handleAddUnavailable = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPeriodTitle || !newPeriodStart || !newPeriodEnd) return;
+    if (newPeriodEnd < newPeriodStart) {
+      showToast({ title: 'Dates invalides', message: 'La date de fin doit être après la date de début.', type: 'warning' });
+      return;
+    }
     const newP = { id: Date.now(), title: newPeriodTitle, start: newPeriodStart, end: newPeriodEnd, type: 'VACATION' as const };
     const updated = [...unavailablePeriods, newP];
     setUnavailablePeriods(updated);
@@ -50,19 +91,19 @@ export const MedicalAvailabilityView: React.FC = () => {
     setNewPeriodStart('');
     setNewPeriodEnd('');
 
-    updateAvailabilitySettings({ unavailablePeriods: updated });
+    if (!(await persist({ unavailablePeriods: updated }))) return;
 
     showToast({
-      title: 'Période d’indisponibilité bloquée',
-      message: 'Ces dates sont verrouillées sur Google Calendar et transmises à l’IA.',
+      title: 'Période d’indisponibilité enregistrée',
+      message: 'L’IA ne proposera plus de rendez-vous sur ces dates.',
       type: 'info'
     });
   };
 
-  const handleRemovePeriod = (id: number | string) => {
+  const handleRemovePeriod = async (id: number | string) => {
     const updated = unavailablePeriods.filter(p => p.id !== id);
     setUnavailablePeriods(updated);
-    updateAvailabilitySettings({ unavailablePeriods: updated });
+    if (!(await persist({ unavailablePeriods: updated }))) return;
     showToast({
       title: 'Période débloquée',
       message: 'Les créneaux de cette période redeviennent réservables.',
@@ -70,18 +111,11 @@ export const MedicalAvailabilityView: React.FC = () => {
     });
   };
 
-  const handleSave = () => {
-    updateAvailabilitySettings({
-      onlineBookingEnabled,
-      consultationDuration,
-      bufferTime,
-      daysSchedule,
-      unavailablePeriods
-    });
-
+  const handleSave = async () => {
+    if (!(await persist())) return;
     showToast({
-      title: 'Disponibilités Enregistrées & Diffusées !',
-      message: 'Le calendrier, la prise de RDV patient et le moteur d’IA ont été synchronisés avec vos créneaux et pauses.',
+      title: 'Disponibilités enregistrées',
+      message: 'L’agenda et le moteur de réservation par e-mail utilisent désormais ces horaires.',
       type: 'success'
     });
   };
@@ -93,16 +127,17 @@ export const MedicalAvailabilityView: React.FC = () => {
         <div>
           <h1 className="text-xl font-black text-[#14213D] tracking-tight">Gestion des Disponibilités & Horaires</h1>
           <p className="text-xs text-slate-500">
-            Éditeur de grille hebdomadaire, pauses déjeuner, durées de consultation et congés du praticien
+            {doctorName ? `Agenda de ${doctorName} — ` : ''}horaires, pauses, durée des consultations et congés
           </p>
         </div>
 
         <button
           onClick={handleSave}
-          className="px-4 py-2.5 bg-[#2563EB] hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all w-fit"
+          disabled={saving}
+          className="px-4 py-2.5 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-60 active:scale-[0.98] text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all w-fit"
         >
           <Save className="w-4 h-4" />
-          <span>Enregistrer les Disponibilités</span>
+          <span>{saving ? 'Enregistrement…' : 'Enregistrer les disponibilités'}</span>
         </button>
       </div>
 
@@ -339,7 +374,7 @@ export const MedicalAvailabilityView: React.FC = () => {
         {/* Add Period Form */}
         <form onSubmit={handleAddUnavailable} className="p-4 bg-slate-50/60 rounded-2xl border border-dashed border-slate-300 space-y-3">
           <div className="text-xs font-bold text-slate-700">Bloquer une nouvelle période d’absence</div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-[11px] font-semibold text-slate-600 mb-1">Motif de l’absence</label>

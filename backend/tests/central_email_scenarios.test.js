@@ -7,6 +7,9 @@ import {
   CLARIFICATION_TEMPLATE
 } from '../src/services/centralEmailRouter.js';
 
+// Horloge figée : lundi 23 novembre 2026, 11h (Tunis)
+const FIXED_NOW = new Date('2026-11-23T10:00:00Z');
+
 describe('MediLawAI — Architecture Centralisée & 4 Scénarios d’E-mails', () => {
 
   test('Étape 2 & 3 : identifyContact crée un contact externe sans exiger d’inscription', async () => {
@@ -82,7 +85,9 @@ describe('MediLawAI — Architecture Centralisée & 4 Scénarios d’E-mails', (
     assert.equal(res.success, true);
     assert.equal(res.needsClarification, true);
     assert.equal(res.email.status, 'WAITING_FOR_REPLY');
-    assert.equal(res.email.clarificationSent, true);
+    // Sans autoSend (mode HITL), la clarification est préparée mais pas encore envoyée
+    assert.equal(res.email.clarificationSent, false);
+    assert.equal(res.decision, 'NEEDS_CLARIFICATION');
 
     // Vérifier le texte exact de clarification
     assert.ok(res.email.clarificationMessage.includes('Afin de transmettre votre demande au bon professionnel'));
@@ -153,7 +158,8 @@ describe('MediLawAI — Architecture Centralisée & 4 Scénarios d’E-mails', (
     const result = await evaluateBookingRequest({
       messageText: 'Bonjour, je souhaite prendre un rendez-vous avec le Dr Rayen jeudi 26 novembre à 15h00 pour une consultation. Merci.',
       patientInfo: { name: 'Sami Chaabane', email: 'sami@gmail.com', phone: '+216 98 111 222' },
-      practitioner: { _id: 'doc-rayen', name: 'Dr. Rayen B.', appointmentDuration: 30 }
+      practitioner: { _id: 'doc-rayen', name: 'Dr. Rayen B.', appointmentDuration: 30 },
+      now: FIXED_NOW,
     });
 
     assert.equal(result.decision, 'DIRECT_CONFIRMATION');
@@ -171,7 +177,8 @@ describe('MediLawAI — Architecture Centralisée & 4 Scénarios d’E-mails', (
     const result = await evaluateBookingRequest({
       messageText: 'Bonjour, je souhaite un rendez-vous avec le Dr Rayen le 2026-11-26 à 13h00 pour une consultation.',
       patientInfo: { name: 'Amine Jaziri' },
-      practitioner: { _id: 'doc-rayen', name: 'Dr. Rayen B.', appointmentDuration: 30 }
+      practitioner: { _id: 'doc-rayen', name: 'Dr. Rayen B.', appointmentDuration: 30 },
+      now: FIXED_NOW,
     });
 
     assert.equal(result.decision, 'PROPOSE_ALTERNATIVES');
@@ -186,7 +193,8 @@ describe('MediLawAI — Architecture Centralisée & 4 Scénarios d’E-mails', (
     const result = await evaluateBookingRequest({
       messageText: 'Bonjour, je souhaite un rendez-vous avec le Dr Rayen le 26 novembre s’il vous plaît.',
       patientInfo: { name: 'Salma Mansour' },
-      practitioner: { _id: 'doc-rayen', name: 'Dr. Rayen B.', appointmentDuration: 30 }
+      practitioner: { _id: 'doc-rayen', name: 'Dr. Rayen B.', appointmentDuration: 30 },
+      now: FIXED_NOW,
     });
 
     assert.equal(result.decision, 'NEED_TIME_PROPOSE_SLOTS');
@@ -201,6 +209,7 @@ describe('MediLawAI — Architecture Centralisée & 4 Scénarios d’E-mails', (
     const resultAvocat = await evaluateBookingRequest({
       messageText: 'Je cherche un avocat pour une consultation juridique lundi à 10h00.',
       patientInfo: { name: 'Client Entreprise' },
+      now: FIXED_NOW,
     });
 
     assert.equal(resultAvocat.practitioner.profession, 'AVOCAT');

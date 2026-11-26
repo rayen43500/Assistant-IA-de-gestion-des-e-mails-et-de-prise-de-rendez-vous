@@ -15,13 +15,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
-// Synchronisation des workflows n8n dans la base SQLite locale
+// Import / publication des workflows n8n via la CLI officielle (uniquement s'ils ont changé)
 try {
-  console.log('[Suite] Synchronisation des 5 workflows n8n (Master + 4 spécialisés)...');
-  execSync('node --experimental-sqlite scripts/sync-n8n-db.js', { cwd: rootDir, stdio: 'ignore' });
-  console.log('[Suite] ✅ Workflows n8n synchronisés sans erreur.');
+  const crypto = await import('crypto');
+  const fs = await import('fs');
+  const wfDir = path.join(rootDir, 'n8n', 'workflows');
+  const hash = crypto.createHash('sha1');
+  for (const f of fs.readdirSync(wfDir).sort()) hash.update(f + fs.readFileSync(path.join(wfDir, f)));
+  const digest = hash.digest('hex');
+  const stamp = path.join(rootDir, 'backend', 'data', '.n8n-workflows.sha1');
+  if (!fs.existsSync(stamp) || fs.readFileSync(stamp, 'utf8') !== digest) {
+    console.log('[Suite] Import et activation des workflows n8n (1ère fois / modifiés)...');
+    execSync('node n8n/import-workflows.js', { cwd: rootDir, stdio: 'inherit' });
+    fs.writeFileSync(stamp, digest);
+  } else {
+    console.log('[Suite] ✅ Workflows n8n déjà à jour.');
+  }
 } catch (e) {
-  console.warn('[Suite] Avertissement sync n8n :', e.message);
+  console.warn('[Suite] Avertissement import n8n :', e.message);
 }
 
 const isWindows = process.platform === 'win32';
@@ -75,7 +86,12 @@ services.forEach(svc => {
     env: {
       ...process.env,
       N8N_AI_ASSISTANT_ENABLED: 'false',
-      N8N_AI_ROUTER_ENABLED: 'false'
+      N8N_AI_ROUTER_ENABLED: 'false',
+      // Les workflows lisent $env.BACKEND_URL ; le backend appelle les webhooks n8n
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: 'false',
+      BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:5000',
+      N8N_WEBHOOK_BASE_URL: process.env.N8N_WEBHOOK_BASE_URL || 'http://localhost:5678/webhook',
+      GENERIC_TIMEZONE: 'Africa/Tunis',
     }
   });
 

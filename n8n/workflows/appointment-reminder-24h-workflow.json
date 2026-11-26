@@ -1,12 +1,16 @@
 {
-  "name": "2. Rappels Automatiques 24h Avant RDV (Gmail Garanti + WhatsApp Optionnel)",
+  "id": "w55mWLlk6GBvxuVQ",
+  "name": "2. Rappels e-mail 24h avant RDV",
   "nodes": [
     {
       "parameters": {},
-      "name": "Quand on clique sur 'Tester'",
+      "name": "Test manuel",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [180, 160]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -19,159 +23,137 @@
           ]
         }
       },
-      "name": "Cron Quotidien (08h00 Tunis)",
+      "name": "Chaque jour 08h00 (Tunis)",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.1,
-      "position": [180, 320]
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
     },
     {
       "parameters": {
-        "httpMethod": "POST",
-        "path": "trigger-reminders",
-        "options": {}
-      },
-      "name": "Webhook Déclenchement Manuel Test",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
-      "position": [180, 480]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:5000/api/appointments/reminders-due",
         "method": "GET",
-        "options": {}
+        "url": "={{ $env.BACKEND_URL || 'http://localhost:5000' }}/api/appointments/reminders-due",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-key",
+              "value": "={{ $env.INTERNAL_API_KEY || '' }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
       },
-      "name": "Récupérer RDV du Lendemain non rappelés",
+      "name": "RDV de demain non rappelés",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [440, 320]
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ]
     },
     {
       "parameters": {
         "fieldToSplitOut": "data",
         "options": {}
       },
-      "name": "Itérer sur chaque Patient",
-      "type": "n8n-nodes-base.itemLists",
-      "typeVersion": 2.1,
-      "position": [680, 320]
+      "name": "Un élément par RDV",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        480,
+        100
+      ]
     },
     {
       "parameters": {
-        "url": "http://localhost:5000/api/appointments/send-reminder",
         "method": "POST",
+        "url": "={{ $env.BACKEND_URL || 'http://localhost:5000' }}/api/appointments/send-reminder",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-key",
+              "value": "={{ $env.INTERNAL_API_KEY || '' }}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"appointmentId\": \"{{ $json._id || 'mock_app_1' }}\",\n  \"patient\": {\n    \"name\": \"{{ $json.patient?.name || 'Patient' }}\",\n    \"email\": \"{{ $json.patient?.email || 'patient@example.tn' }}\",\n    \"phone\": \"{{ $json.patient?.phone || '+216 98 456 789' }}\"\n  },\n  \"date\": \"{{ $json.date || 'demain' }}\",\n  \"timeSlot\": {\n    \"start\": \"{{ $json.timeSlot?.start || '09:30' }}\"\n  }\n}"
+        "jsonBody": "={{ JSON.stringify({ appointmentId: $json._id }) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
-      "name": "1. Envoyer Rappel E-mail (Gmail Prioritaire)",
+      "name": "Envoyer le rappel (Gmail)",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [920, 320]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:5000/api/integrations/whatsapp/send-notification",
-        "method": "POST",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"type\": \"APPOINTMENT_REMINDER_24H\",\n  \"recipient\": \"{{ $json.email?.recipient || '+216 98 456 789' }}\",\n  \"message\": \"👋 Rappel consultation cabinet Dr. Rayen B. prévu demain. (Notification WhatsApp Optionnelle)\"\n}"
-      },
-      "name": "2. Notification WhatsApp (Optionnelle)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "onError": "continueRegularOutput",
-      "position": [1160, 320]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:5000/api/appointments/mock_app_1/reminder-sent",
-        "method": "POST",
-        "options": {}
-      },
-      "name": "3. Consigner Rappel Envoyé dans l'Agenda",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1400, 320]
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        100
+      ],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
-    "Quand on clique sur 'Tester'": {
+    "Test manuel": {
       "main": [
         [
           {
-            "node": "Récupérer RDV du Lendemain non rappelés",
+            "node": "RDV de demain non rappelés",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Cron Quotidien (08h00 Tunis)": {
+    "Chaque jour 08h00 (Tunis)": {
       "main": [
         [
           {
-            "node": "Récupérer RDV du Lendemain non rappelés",
+            "node": "RDV de demain non rappelés",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Webhook Déclenchement Manuel Test": {
+    "RDV de demain non rappelés": {
       "main": [
         [
           {
-            "node": "Récupérer RDV du Lendemain non rappelés",
+            "node": "Un élément par RDV",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Récupérer RDV du Lendemain non rappelés": {
+    "Un élément par RDV": {
       "main": [
         [
           {
-            "node": "Itérer sur chaque Patient",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Itérer sur chaque Patient": {
-      "main": [
-        [
-          {
-            "node": "1. Envoyer Rappel E-mail (Gmail Prioritaire)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "1. Envoyer Rappel E-mail (Gmail Prioritaire)": {
-      "main": [
-        [
-          {
-            "node": "2. Notification WhatsApp (Optionnelle)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "2. Notification WhatsApp (Optionnelle)": {
-      "main": [
-        [
-          {
-            "node": "3. Consigner Rappel Envoyé dans l'Agenda",
+            "node": "Envoyer le rappel (Gmail)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Tunis",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Envoie un rappel e-mail réel la veille de chaque rendez-vous confirmé."
   }
 }

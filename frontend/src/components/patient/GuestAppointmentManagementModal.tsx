@@ -86,7 +86,7 @@ export const GuestAppointmentManagementModal: React.FC<GuestAppointmentManagemen
   };
 
   const copyManagementLink = () => {
-    const url = `${window.location.origin}/rendez-vous/gestion?token=${encodeURIComponent(tokenInput)}`;
+    const url = `${window.location.origin}/?token=${encodeURIComponent(tokenInput)}`;
     navigator.clipboard.writeText(url);
     showToast({
       title: 'Lien copié',

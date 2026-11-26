@@ -7,7 +7,9 @@ import Conversation from '../models/Conversation.js';
 import AuditLog from '../models/AuditLog.js';
 import { calculateDoctorAvailability } from '../services/availabilityService.js';
 import { queryAiService } from '../services/aiClient.js';
+import { getPractitionerScope } from '../middleware/practitionerScope.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { sendValidatedReply } from './emails.js';
 
 const router = express.Router();
 
@@ -187,7 +189,7 @@ router.post('/google/gmail', async (req, res) => {
  */
 router.post('/:id/approve', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
-    const email = await Email.findOne({ _id: req.params.id, clinicId: req.clinicId });
+    const email = await Email.findOne({ _id: req.params.id, clinicId: req.clinicId, ...(await getPractitionerScope(req)) });
     if (!email) {
       return res.status(404).json({ message: 'E-mail introuvable.' });
     }
@@ -195,17 +197,23 @@ router.post('/:id/approve', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMI
     const { editedReply } = req.body;
     const finalContent = editedReply || email.draftReply;
 
-    email.draftReply = finalContent;
-    email.status = 'VALIDATED_AND_SENT';
-    email.processingStatus = 'SENT';
-    email.validatedBy = req.user._id;
+    const sendResult = await sendValidatedReply(email, finalContent);
+    if (/^[0-9a-f]{24}$/i.test(String(req.user._id))) email.validatedBy = req.user._id;
     email.processedAt = new Date();
     await email.save();
 
+    if (!sendResult.sent) {
+      return res.status(502).json({
+        success: false,
+        message: `Brouillon approuvé mais non envoyé (${sendResult.reason}). Connectez la boîte Gmail centrale.`,
+        email,
+      });
+    }
+
     await EmailDraft.findOneAndUpdate(
       { emailId: email._id },
-      { approvalStatus: 'APPROVED', approvedBy: req.user._id, sentAt: new Date(), deliveryStatus: 'SENT' }
-    );
+      { approvalStatus: 'APPROVED', sentAt: new Date(), deliveryStatus: 'SENT' }
+    ).catch(() => {});
 
     await AuditLog.create({
       clinicId: req.clinicId,

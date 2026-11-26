@@ -1,8 +1,18 @@
 import axios from 'axios';
 import type { EmailItem, AppointmentItem } from '../types';
+import { mapEmail, mapAppointment } from './mappers';
+
+/** Mode démonstration (profils fictifs, connexion hors-ligne). Désactivé par défaut. */
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+export const AUTH_TOKEN_KEY = 'medilaw_jwt_token';
+export const AUTH_USER_KEY = 'medilaw_user';
 
 // URL Backend : prend VITE_API_BASE_URL (http://localhost:5000) avec fallback local
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+/** Interface n8n (liens « Ouvrir dans n8n ») */
+export const N8N_UI_URL = import.meta.env.VITE_N8N_URL || 'http://localhost:5678';
+/** Libellé court du serveur affiché dans l'interface (ex : api.mondomaine.tn) */
+export const SERVER_LABEL = (() => { try { return new URL(API_BASE_URL).host; } catch { return API_BASE_URL; } })();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -20,6 +30,26 @@ apiClient.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Session expirée / invalide : déconnexion propre côté interface
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const url = String(error.config?.url || '');
+    if (error.response?.status === 401 && !url.includes('/api/auth/login') && localStorage.getItem(AUTH_TOKEN_KEY)) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+      window.dispatchEvent(new CustomEvent('medilaw:session-expired'));
+    }
+    return Promise.reject(error);
+  }
+);
+
+/** Message d'erreur lisible pour l'utilisateur */
+export function apiErrorMessage(err: any, fallback = 'Une erreur est survenue.'): string {
+  if (!err?.response) return 'Serveur injoignable. Vérifiez votre connexion et réessayez.';
+  return err.response.data?.message || fallback;
+}
 
 // ========================================================
 // 0. AUTHENTIFICATION & ESPACE DE CONNEXION
@@ -63,7 +93,7 @@ export const apiLogout = () => {
 
 export const apiFetchEmails = async (): Promise<EmailItem[]> => {
   const response = await apiClient.get('/api/emails');
-  return response.data;
+  return Array.isArray(response.data) ? response.data.map(mapEmail) : [];
 };
 
 export const apiIngestEmail = async (emailPayload: {
@@ -74,9 +104,8 @@ export const apiIngestEmail = async (emailPayload: {
 }): Promise<EmailItem> => {
   const response = await apiClient.post('/api/emails/ingest', {
     ...emailPayload,
-    clinicId: emailPayload.clinicId || import.meta.env.VITE_DEFAULT_CLINIC_ID || '66f1234567890abcdef12345',
   });
-  return response.data;
+  return mapEmail(response.data);
 };
 
 export const apiValidateEmail = async (
@@ -94,7 +123,7 @@ export const apiValidateEmail = async (
 export const apiFetchAppointments = async (date?: string): Promise<AppointmentItem[]> => {
   const url = date ? `/api/appointments?date=${date}` : '/api/appointments';
   const response = await apiClient.get(url);
-  return response.data;
+  return Array.isArray(response.data) ? response.data.map(mapAppointment) : [];
 };
 
 export const apiCheckSlotAvailability = async (payload: {

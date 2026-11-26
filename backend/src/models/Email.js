@@ -190,6 +190,20 @@ const EmailSchema = new mongoose.Schema({
   sentAt: {
     type: Date,
   },
+  // Suivi de la réponse envoyée au patient (Gmail)
+  replyStatus: {
+    type: String,
+    enum: ['DRAFT', 'SENT', 'FAILED'],
+    default: 'DRAFT',
+    index: true,
+  },
+  replyError: String,
+  replyGmailMessageId: String,
+  bookingDecision: String,
+  appointmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Appointment',
+  },
   receivedAt: {
     type: Date,
     default: Date.now,

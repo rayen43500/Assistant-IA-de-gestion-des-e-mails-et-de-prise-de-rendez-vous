@@ -1,12 +1,12 @@
 import React from 'react';
-import { 
-  Mail, 
-  Calendar, 
-  Clock, 
-  CheckCircle2, 
-  AlertTriangle, 
-  TrendingUp, 
-  Sparkles, 
+import {
+  Mail,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  TrendingUp,
+  Sparkles,
   ArrowUpRight,
   UserCheck,
   Zap,
@@ -27,20 +27,44 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
   onNavigateToCalendar,
   onNavigateToAutomations
 }) => {
-  const { sector, emails, appointments, updateEmailStatus, showToast } = useAppStore();
+  const { sector, emails, appointments, updateEmailStatus, showToast, currentUser } = useAppStore();
+
+  const now = new Date();
+  const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const todayISO = isoOf(now);
+  const todayLabel = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const totalEmails = emails.length;
   const pendingApprovals = emails.filter(e => e.status === 'PENDING_VALIDATION');
-  const todayAppointments = appointments.filter(a => a.date === '2026-11-03' && a.status !== 'CANCELLED');
+  const autoReplied = emails.filter(e => (e as any).replyStatus === 'SENT' || e.status === 'SENT' || e.status === 'VALIDATED_AND_SENT').length;
+  const awaitingPatient = emails.filter(e => e.status === 'WAITING_FOR_REPLY' || e.status === 'NEEDS_CLARIFICATION').length;
+  const avgConfidence = emails.length ? Math.round(emails.reduce((sum, e) => sum + (e.confidence || 0), 0) / emails.length * 100) : null;
+  const activeAppointments = appointments.filter(a => a.status !== 'CANCELLED');
+  const todayAppointments = activeAppointments.filter(a => a.date === todayISO).sort((a, b) => a.timeStart.localeCompare(b.timeStart));
+  const in7Days = isoOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7));
+  const upcomingCount = activeAppointments.filter(a => a.date >= todayISO && a.date <= in7Days).length;
+
+  // Activité réelle des 7 derniers jours (e-mails reçus + RDV pris)
+  const last7 = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6 + i);
+    const iso = isoOf(d);
+    return {
+      iso,
+      label: d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', ''),
+      emails: emails.filter(e => ((e as any).receivedAtISO || '').startsWith(iso)).length,
+      appointments: activeAppointments.filter(a => a.date === iso).length,
+    };
+  });
+  const maxActivity = Math.max(1, ...last7.map(d => d.emails + d.appointments));
+  const weekEmails = last7.reduce((n, d) => n + d.emails, 0);
+  const peakDay = last7.reduce((best, d) => (d.emails > best.emails ? d : best), last7[0]);
   const emergencyCount = emails.filter(e => e.intent === 'EMERGENCY' && e.status !== 'VALIDATED_AND_SENT').length;
 
-  const handleQuickApprove = (id: string, name: string) => {
-    updateEmailStatus(id, 'VALIDATED_AND_SENT');
-    showToast({
-      title: 'E-mail validé et envoyé !',
-      message: `La réponse officielle a été transmise à ${name} sans délai.`,
-      type: 'success'
-    });
+  const handleQuickApprove = async (id: string, name: string) => {
+    const ok = await updateEmailStatus(id, 'VALIDATED_AND_SENT');
+    if (ok) {
+      showToast({ title: 'Réponse envoyée', message: `La réponse a été envoyée à ${name}.`, type: 'success' });
+    }
   };
 
   return (
@@ -55,7 +79,7 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Mardi 3 Novembre 2026 • Système d'automatisation IA et synchronisation n8n opérationnels.
+            <span className="capitalize">{todayLabel}</span> • {currentUser?.name}
           </p>
         </div>
 
@@ -72,7 +96,7 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
             className="px-3.5 py-2 rounded-xl bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all"
           >
             <Workflow className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Workflows n8n Actifs</span>
+            <span>Automatisations n8n</span>
           </button>
         </div>
       </div>
@@ -89,20 +113,20 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
           <div className="text-2xl font-black text-[#14213D] mt-2">{totalEmails}</div>
           <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-2">
             <TrendingUp className="w-3.5 h-3.5" />
-            <span>+14.2% vs semaine passée</span>
+            <span>{autoReplied} réponse(s) envoyée(s)</span>
           </div>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-[#E5EAF2] shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Précision Modèle NLP</span>
+            <span className="text-xs font-semibold text-slate-500">Confiance moyenne de l’IA</span>
             <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
               <Sparkles className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-[#14213D] mt-2">94.2%</div>
+          <div className="text-2xl font-black text-[#14213D] mt-2">{avgConfidence === null ? '—' : `${avgConfidence}%`}</div>
           <div className="flex items-center gap-1 text-[11px] text-purple-600 font-semibold mt-2">
-            <span>F1-Score certifié sur 500 tests</span>
+            <span>Sur les {totalEmails} e-mail(s) analysé(s)</span>
           </div>
         </div>
 
@@ -116,20 +140,20 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
           <div className="text-2xl font-black text-[#14213D] mt-2">{todayAppointments.length}</div>
           <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold mt-2">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>100% synchronisés Google Calendar</span>
+            <span>{upcomingCount} RDV dans les 7 prochains jours</span>
           </div>
         </div>
 
         <div className="p-5 rounded-2xl bg-white border border-[#E5EAF2] shadow-xs hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Temps Moyen de Traitement</span>
+            <span className="text-xs font-semibold text-slate-500">En attente du patient</span>
             <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-[#14213D] mt-2">~25 ms</div>
+          <div className="text-2xl font-black text-[#14213D] mt-2">{awaitingPatient}</div>
           <div className="flex items-center gap-1 text-[11px] text-blue-600 font-semibold mt-2">
-            <span>Inférieur aux 30s imposées par CDC</span>
+            <span>Précision ou choix de créneau demandé</span>
           </div>
         </div>
       </div>
@@ -149,20 +173,19 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
           {/* Graphical Mock representing volume evolution */}
           <div className="h-44 w-full bg-[#F7F9FC] rounded-xl border border-slate-100 p-4 flex flex-col justify-between">
             <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-              <span>Moyenne : 24 e-mails / jour</span>
-              <span className="text-blue-600 font-bold">Pic : Jeudi (34 e-mails)</span>
+              <span>{weekEmails} e-mail(s) cette semaine</span>
+              <span className="text-blue-600 font-bold">{peakDay.emails > 0 ? `Pic : ${peakDay.label} (${peakDay.emails})` : 'Aucune activité récente'}</span>
             </div>
             {/* SVG Wave preview */}
             <div className="h-24 w-full flex items-end gap-3 px-2">
-              {[40, 65, 50, 95, 75, 45, 80].map((h, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                  <div 
-                    style={{ height: `${h}%` }} 
-                    className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-md opacity-85 hover:opacity-100 transition-all cursor-pointer"
+              {last7.map((d) => (
+                <div key={d.iso} className="flex-1 h-full flex flex-col items-center justify-end gap-1.5" title={`${d.emails} e-mail(s), ${d.appointments} RDV`}>
+                  <span className="text-[10px] font-mono text-slate-500">{d.emails + d.appointments || ''}</span>
+                  <div
+                    style={{ height: `${Math.max(4, ((d.emails + d.appointments) / maxActivity) * 100)}%` }}
+                    className={`w-full rounded-t-md transition-all ${d.emails + d.appointments ? 'bg-gradient-to-t from-blue-600 to-blue-400' : 'bg-slate-200'}`}
                   />
-                  <span className="text-[10px] text-slate-500 font-medium">
-                    {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][i]}
-                  </span>
+                  <span className={`text-[10px] font-medium capitalize ${d.iso === todayISO ? 'text-blue-700 font-bold' : 'text-slate-500'}`}>{d.label}</span>
                 </div>
               ))}
             </div>
@@ -172,7 +195,7 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
           <div className="pt-2">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold text-[#14213D] uppercase tracking-wider">
-                Planning du Jour ({sector === 'MEDICAL' ? 'Dr. Ben Salem' : 'Me. Trabelsi'})
+                Planning du jour
               </h3>
               <button onClick={onNavigateToCalendar} className="text-xs font-bold text-blue-600 hover:underline">
                 Voir l'agenda complet →
@@ -180,6 +203,11 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
             </div>
 
             <div className="space-y-2">
+              {todayAppointments.length === 0 && (
+                <div className="p-4 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                  Aucun rendez-vous aujourd’hui.
+                </div>
+              )}
               {todayAppointments.map((apt) => (
                 <div key={apt.id} className="p-3 rounded-xl border border-[#E5EAF2] bg-[#F7F9FC] flex items-center justify-between text-xs">
                   <div className="flex items-center gap-3">
@@ -193,7 +221,7 @@ export const EnterpriseDashboard: React.FC<EnterpriseDashboardProps> = ({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-0.5 rounded-full font-semibold text-[10px] bg-emerald-100 text-emerald-800">
-                      Confirmé Google Calendar
+                      {apt.status === 'CONFIRMED' ? 'Confirmé' : 'Planifié'}{apt.googleCalendarSynced ? ' • Google ✓' : ''}
                     </span>
                   </div>
                 </div>

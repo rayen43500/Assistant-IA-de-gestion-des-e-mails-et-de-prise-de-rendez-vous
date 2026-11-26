@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Bell, 
   Calendar, 
@@ -23,66 +23,56 @@ export const MedicalNotificationsCenterView: React.FC<MedicalNotificationsCenter
   onNavigateToEmails,
   onNavigateToCalendar
 }) => {
-  const { showToast } = useAppStore();
+  const { showToast, emails, appointments } = useAppStore();
   const [filterType, setFilterType] = useState<'ALL' | 'APPOINTMENT' | 'EMAIL' | 'CANCELLATION' | 'ALERT'>('ALL');
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('medilaw_read_notifications') || '[]')); } catch { return new Set(); }
+  });
 
-  const [notifications, setNotifications] = useState([
-    {
-      id: 'notif-1',
-      type: 'ALERT',
-      title: '🚨 Alerte SAMU 190 Déclenchée',
-      description: 'Mme Mona Karray a signalé de violentes douleurs thoraciques et essoufflement. Consigne vitale transmise et praticien alerté.',
-      time: 'Il y a 12 min',
-      unread: true,
-      priority: 'CRITICAL',
-      actionLabel: 'Voir le message',
-      actionType: 'EMAIL'
-    },
-    {
-      id: 'notif-2',
-      type: 'APPOINTMENT',
-      title: 'Nouveau Rendez-vous Confirmé',
-      description: 'M. Sami Chaabane a confirmé sa consultation de cardiologie pour aujourd’hui à 09h00. Événement synchronisé sur Google Calendar.',
-      time: 'Il y a 35 min',
-      unread: true,
-      priority: 'HIGH',
-      actionLabel: 'Voir le calendrier',
-      actionType: 'CALENDAR'
-    },
-    {
-      id: 'notif-3',
-      type: 'EMAIL',
-      title: 'Nouvelle Demande de Tarifs & CNAM',
-      description: 'M. Karim Bouazizi sollicite la grille tarifaire pour une échocardiographie Doppler et prise en charge conventionnée.',
-      time: 'Il y a 1h',
-      unread: true,
-      priority: 'NORMAL',
-      actionLabel: 'Valider la réponse IA',
-      actionType: 'EMAIL'
-    },
-    {
-      id: 'notif-4',
-      type: 'CANCELLATION',
-      title: 'Annulation de Créneau',
-      description: 'Mme Leila Trabelsi a annulé son créneau d’échocardiographie de 10h00. Le créneau a été réouvert automatiquement à la réservation.',
-      time: 'Il y a 2h',
-      unread: false,
-      priority: 'NORMAL',
-      actionLabel: 'Consulter l’agenda',
-      actionType: 'CALENDAR'
-    },
-    {
-      id: 'notif-5',
-      type: 'APPOINTMENT',
-      title: 'Rappel WhatsApp 24h Expédié',
-      description: 'Le workflow n8n a délivré le message WhatsApp de rappel avec l’itinéraire du cabinet à Kamel Dridi pour demain 14h00.',
-      time: 'Aujourd’hui 08:00',
-      unread: false,
-      priority: 'LOW',
-      actionLabel: 'Détails du rappel',
-      actionType: 'CALENDAR'
+  const relative = (iso?: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const min = Math.round((Date.now() - d.getTime()) / 60000);
+    if (min < 1) return 'À l’instant';
+    if (min < 60) return `Il y a ${min} min`;
+    if (min < 24 * 60) return `Il y a ${Math.round(min / 60)} h`;
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+  };
+
+  // Notifications générées à partir des vrais e-mails et rendez-vous
+  const notifications = useMemo(() => {
+    const list: any[] = [];
+    for (const e of emails) {
+      const when = e.receivedAtISO || '';
+      if (e.intent === 'EMERGENCY') {
+        list.push({ id: `em-${e.id}`, type: 'ALERT', title: '🚨 Urgence vitale signalée', description: `${e.sender.name} : « ${e.subject} ». Les consignes SAMU 190 ont été préparées.`, when, priority: 'CRITICAL', actionLabel: 'Voir le message', actionType: 'EMAIL' });
+      } else if (e.bookingDecision === 'DIRECT_CONFIRMATION' || e.bookingDecision === 'RESCHEDULED') {
+        list.push({ id: `em-${e.id}`, type: 'APPOINTMENT', title: e.bookingDecision === 'RESCHEDULED' ? 'Rendez-vous déplacé par e-mail' : 'Rendez-vous réservé par l’IA', description: `${e.sender.name} — ${e.extractedEntities?.requestedDate || ''} ${e.extractedEntities?.requestedTime || ''}`.trim(), when, priority: 'HIGH', actionLabel: 'Voir le calendrier', actionType: 'CALENDAR' });
+      } else if (e.intent === 'CANCELLATION') {
+        list.push({ id: `em-${e.id}`, type: 'CANCELLATION', title: 'Demande d’annulation', description: `${e.sender.name} : « ${e.subject} »`, when, priority: 'NORMAL', actionLabel: 'Voir le message', actionType: 'EMAIL' });
+      } else if (e.status === 'PENDING_VALIDATION') {
+        list.push({ id: `em-${e.id}`, type: 'EMAIL', title: 'Réponse à valider', description: `${e.sender.name} : « ${e.subject} »`, when, priority: 'NORMAL', actionLabel: 'Valider la réponse', actionType: 'EMAIL' });
+      } else if (e.status === 'WAITING_FOR_REPLY') {
+        list.push({ id: `em-${e.id}`, type: 'EMAIL', title: 'En attente de la réponse du patient', description: `${e.sender.name} : praticien ou créneau à préciser.`, when, priority: 'LOW', actionLabel: 'Voir le message', actionType: 'EMAIL' });
+      }
     }
-  ]);
+    for (const a of appointments) {
+      if (a.status === 'CANCELLED') {
+        list.push({ id: `apt-${a.id}`, type: 'CANCELLATION', title: 'Rendez-vous annulé', description: `${a.patientName} — ${a.date} à ${a.timeStart}. Le créneau est de nouveau disponible.`, when: `${a.date}T${a.timeStart}`, priority: 'NORMAL', actionLabel: 'Consulter l’agenda', actionType: 'CALENDAR' });
+      }
+    }
+    return list
+      .sort((x, y) => (y.when || '').localeCompare(x.when || ''))
+      .map(n => ({ ...n, time: relative(n.when), unread: !readIds.has(n.id) }));
+  }, [emails, appointments, readIds]);
+
+  const setNotifications = (updater: (prev: any[]) => any[]) => {
+    const next = updater(notifications);
+    const ids = new Set(next.filter(n => !n.unread).map(n => n.id));
+    setReadIds(ids);
+    try { localStorage.setItem('medilaw_read_notifications', JSON.stringify([...ids])); } catch {}
+  };
 
   const handleMarkAllRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
@@ -147,6 +137,9 @@ export const MedicalNotificationsCenterView: React.FC<MedicalNotificationsCenter
 
       {/* Notifications List */}
       <div className="bg-white rounded-2xl border border-[#E8EDF4] shadow-xs overflow-hidden divide-y divide-slate-100">
+        {filtered.length === 0 && (
+          <div className="p-8 text-center text-xs text-slate-400">Aucune notification pour le moment.</div>
+        )}
         {filtered.map(notif => (
           <div 
             key={notif.id}

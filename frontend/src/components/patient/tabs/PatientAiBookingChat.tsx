@@ -14,7 +14,10 @@ import {
   ShieldCheck,
   RefreshCw
 } from 'lucide-react';
+import { mapAppointment } from '../../../services/mappers';
+import { API_BASE_URL } from '../../../services/apiClient';
 import { useAppStore } from '../../../stores/useAppStore';
+import { getPatientContact, addSavedBookingToken } from '../patientData';
 
 interface ChatMessage {
   id: string;
@@ -27,16 +30,18 @@ interface ChatMessage {
 }
 
 export const PatientAiBookingChat: React.FC = () => {
-  const { currentUser, addAppointment, showToast } = useAppStore();
+  const { currentUser, showToast } = useAppStore();
   const [selectedProfession, setSelectedProfession] = useState<'MEDECIN' | 'AVOCAT'>('MEDECIN');
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Mémoire de la conversation (praticien, date, créneaux proposés)
+  const [chatContext, setChatContext] = useState<any>({});
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       sender: 'AI',
-      text: `Bonjour ${currentUser?.name || ''} ! Je suis l'assistant intelligent MediLawAI.\nVous pouvez me demander directement un rendez-vous (en précisant le praticien, la date et l'heure souhaitée).\n\n💡 Exemple : "Je souhaite un rendez-vous avec le Dr. Rayen jeudi 26 novembre à 15h00 pour une consultation."`,
+      text: `Bonjour ! Je suis l'assistant de prise de rendez-vous.\nIndiquez le praticien (ou la spécialité), le jour et l'heure souhaités : je vérifie l'agenda et je réserve.\n\n💡 Exemple : « Je souhaite un rendez-vous lundi à 10h pour une consultation. »`,
       time: 'À l’instant'
     }
   ]);
@@ -57,17 +62,14 @@ export const PatientAiBookingChat: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/ai/patient-chat-booking', {
+      const response = await fetch(`${API_BASE_URL}/api/ai/patient-chat-booking`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
           selectedProfession,
-          patientInfo: {
-            name: currentUser?.name || 'Amine Jaziri',
-            email: currentUser?.email || 'amine.jaziri@gmail.com',
-            phone: '+216 98 123 456'
-          }
+          patientInfo: getPatientContact(),
+          context: chatContext
         })
       });
 
@@ -85,28 +87,17 @@ export const PatientAiBookingChat: React.FC = () => {
       };
 
       setMessages(prev => [...prev, aiMsg]);
+      setChatContext(data.confirmed ? {} : (data.context || {}));
+      if (data.managementToken) addSavedBookingToken(data.managementToken);
 
       // Si le rendez-vous a été confirmé automatiquement dans le calendrier interne
       if (data.confirmed && data.appointment) {
-        addAppointment({
-          id: data.appointment._id || 'apt-' + Date.now(),
-          patientName: currentUser?.name || 'Amine Jaziri',
-          patientEmail: currentUser?.email || 'amine.jaziri@gmail.com',
-          patientPhone: '+216 98 123 456',
-          practitionerName: data.practitioner?.name || 'Dr. Rayen B.',
-          serviceName: data.appointment.reason || 'Consultation standard',
-          date: data.date || '2026-11-26',
-          timeStart: data.time || '15:00',
-          timeEnd: data.appointment.timeSlot?.end || '15:30',
-          durationMinutes: 30,
-          status: 'CONFIRMED',
-          reminderSent24h: false,
-          googleCalendarSynced: false,
-        });
+        // Le RDV est déjà enregistré par le serveur : on l'ajoute seulement à l'affichage
+        useAppStore.setState((state) => ({ appointments: [...state.appointments, mapAppointment(data.appointment)] }));
 
         showToast({
-          title: 'Rendez-vous Confirmé en 1 Clic !',
-          message: `Votre créneau avec ${data.practitioner?.name} a été enregistré dans le calendrier interne.`,
+          title: 'Rendez-vous confirmé',
+          message: `Votre créneau avec ${data.practitioner?.name} est réservé. Retrouvez-le dans « Mes rendez-vous ».`,
           type: 'success'
         });
       }
@@ -179,22 +170,22 @@ export const PatientAiBookingChat: React.FC = () => {
       <div className="p-2 border-b border-slate-100 bg-white flex items-center gap-2 overflow-x-auto text-[11px] no-scrollbar">
         <span className="text-slate-400 font-bold shrink-0 text-[10px] uppercase">Suggestions :</span>
         <button
-          onClick={() => handleSend("Je souhaite prendre un rendez-vous avec le Dr Rayen jeudi 26 novembre à 15h00 pour une consultation.")}
+          onClick={() => handleSend("Je souhaite un rendez-vous demain à 10h00 pour une consultation.")}
           className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium shrink-0 border border-blue-100 text-left"
         >
-          ✨ Toutes infos fournies (Dr Rayen jeudi 26 nov 15h)
+          ✨ Demain à 10h00
         </button>
         <button
           onClick={() => handleSend("Bonjour, je souhaite un rendez-vous avec un avocat pour lundi prochain.")}
           className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 font-medium shrink-0 border border-purple-100 text-left"
         >
-          ⚖️ Avocat (Lundi - heure manquante)
+          ⚖️ Avocat lundi prochain
         </button>
         <button
-          onClick={() => handleSend("Bonjour je voudrais un rdv de contrôle cardiologie avec le Dr Rayen.")}
+          onClick={() => handleSend("Bonjour, je voudrais un rendez-vous de contrôle la semaine prochaine.")}
           className="px-2.5 py-1 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 font-medium shrink-0 border border-slate-200 text-left"
         >
-          📅 Date manquante
+          📅 Semaine prochaine
         </button>
       </div>
 

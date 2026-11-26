@@ -127,9 +127,6 @@ function classifyText(subject, body, clinicType = 'MEDICAL') {
     executionTimeMs: 12.0,
     modelUsed: 'RuleBased-Fallback-v2.4'
   };
-    executionTimeMs: 15.1,
-    modelUsed: 'DeepLearning-BiLSTM-Biomed-v2.4'
-  };
 }
 
 const server = http.createServer((req, res) => {

@@ -79,8 +79,8 @@ export async function getDoctorGoogleBusySlots(doctorId, dateStr) {
     return [];
   }
 
-  const timeMin = `${dateStr}T00:00:00Z`;
-  const timeMax = `${dateStr}T23:59:59Z`;
+  const timeMin = `${dateStr}T00:00:00+01:00`; // Africa/Tunis (UTC+1, sans heure d'été)
+  const timeMax = `${dateStr}T23:59:59+01:00`;
 
   try {
     const calendarId = integration.calendarId || 'primary';

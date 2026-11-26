@@ -1,11 +1,14 @@
 import express from 'express';
+import { sendGmailMessage } from '../services/gmailSenderService.js';
+import { formatDateFr } from '../services/smartBookingDecisionService.js';
+import { notifyN8n, N8N_EVENTS } from '../services/n8nNotifier.js';
 import crypto from 'crypto';
 import Doctor from '../models/Doctor.js';
 import Patient from '../models/Patient.js';
 import DoctorPatient from '../models/DoctorPatient.js';
 import Appointment from '../models/Appointment.js';
 import Clinic from '../models/Clinic.js';
-import { calculateDoctorAvailability } from '../services/availabilityService.js';
+import { calculateDoctorAvailability, loadPractitionerDay, checkTimeInDay } from '../services/availabilityService.js';
 import { syncAppointmentToGoogle } from '../services/googleCalendarService.js';
 
 const router = express.Router();
@@ -18,7 +21,7 @@ router.get('/doctors', async (req, res) => {
   try {
     const doctors = await Doctor.find({ status: 'ACTIVE' })
       .populate('tenantId', 'name specialty address phone')
-      .select('name specialty professionalEmail appointmentDuration bufferTime bookingSettings');
+      .select('name specialty profession appointmentDuration bufferTime bookingSettings');
     res.json(doctors);
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la récupération des praticiens', error: error.message });
@@ -95,7 +98,23 @@ router.post('/bookings', async (req, res) => {
       return res.status(404).json({ message: 'Le praticien sélectionné est indisponible ou introuvable.' });
     }
 
+    if (doctor.bookingSettings?.onlineBookingEnabled === false) {
+      return res.status(403).json({ message: 'Ce praticien n’accepte pas la réservation en ligne. Contactez le cabinet.' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(startTime))) {
+      return res.status(400).json({ message: 'Date ou heure invalide.' });
+    }
+    if (!/@/.test(String(patientEmail))) {
+      return res.status(400).json({ message: 'Adresse e-mail invalide.' });
+    }
+
     const duration = doctor.appointmentDuration || 30;
+    // Mêmes règles que la réservation par e-mail : horaires, pauses, congés, passé, conflits
+    const day = await loadPractitionerDay(doctor, date);
+    const slotCheck = checkTimeInDay(day, startTime, duration);
+    if (!slotCheck.free) {
+      return res.status(409).json({ conflict: true, message: `Créneau indisponible : ${slotCheck.reason}` });
+    }
     const [h, m] = startTime.split(':').map(Number);
     const endMinutes = h * 60 + m + duration;
     const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
@@ -164,8 +183,30 @@ router.post('/bookings', async (req, res) => {
       console.warn('[PublicBooking] Erreur lors de la synchronisation asynchrone Google:', err.message);
     });
 
+    // 8. E-mail de confirmation au patient avec son lien de gestion (annulation sans compte)
+    const manageUrl = `${(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')}/?token=${guestManagementToken}`;
+    const mail = await sendGmailMessage({
+      to: newAppointment.patient.email,
+      subject: `Confirmation de votre rendez-vous du ${formatDateFr(date)} à ${startTime}`,
+      body: `Bonjour ${newAppointment.patient.name},
+
+Votre rendez-vous est confirmé :
+📅 ${formatDateFr(date)} à ${startTime}
+👨‍⚕️ ${doctor.name}${doctor.specialty ? ' (' + doctor.specialty + ')' : ''}
+📝 Motif : ${newAppointment.reason}
+
+Pour consulter ou annuler ce rendez-vous : ${manageUrl}
+
+Un rappel vous sera envoyé la veille.
+
+Bien cordialement,
+Le secrétariat MediLawAI`,
+    }).catch(() => ({ sent: false }));
+    notifyN8n(N8N_EVENTS.APPOINTMENT_BOOKED, { appointmentId: String(newAppointment._id), date, time: startTime, source: 'PUBLIC_GUEST' });
+
     res.status(201).json({
       success: true,
+      confirmationEmailSent: Boolean(mail?.sent),
       message: 'Votre rendez-vous a été confirmé avec succès !',
       appointment: {
         id: newAppointment._id,
@@ -176,7 +217,7 @@ router.post('/bookings', async (req, res) => {
         patient: newAppointment.patient,
       },
       managementToken: guestManagementToken,
-      managementUrl: `/rendez-vous/gestion/${guestManagementToken}`,
+      managementUrl: `/?token=${guestManagementToken}`,
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -207,6 +248,7 @@ router.get('/bookings/:token', async (req, res) => {
       id: appointment._id,
       date: appointment.date,
       timeSlot: appointment.timeSlot,
+      reason: appointment.reason,
       status: appointment.status,
       doctor: appointment.doctorId,
       clinic: appointment.tenantId,
@@ -215,7 +257,8 @@ router.get('/bookings/:token', async (req, res) => {
         email: appointment.patient.email,
         phone: appointment.patient.phone,
       },
-      canCancel: appointment.status !== 'CANCELLED',
+      canCancel: !['CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(appointment.status),
+      createdAt: appointment.createdAt,
     });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la consultation du rendez-vous', error: error.message });

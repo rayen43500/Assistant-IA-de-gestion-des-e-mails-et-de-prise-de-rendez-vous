@@ -21,7 +21,7 @@ router.get('/current', protect, async (req, res) => {
 // PUT /api/clinics/settings - Mise à jour des réglages IA et horaires
 router.put('/settings', protect, authorize('ADMIN', 'PRATICIEN'), async (req, res) => {
   try {
-    const { aiSettings, openingHours, pricing, specialty, phone } = req.body;
+    const { aiSettings, openingHours, pricing, specialty, phone, name } = req.body;
     const clinic = await Clinic.findById(req.clinicId);
 
     if (!clinic) {
@@ -32,13 +32,14 @@ router.put('/settings', protect, authorize('ADMIN', 'PRATICIEN'), async (req, re
     if (openingHours) clinic.openingHours = openingHours;
     if (pricing) clinic.pricing = pricing;
     if (specialty) clinic.specialty = specialty;
-    if (phone) clinic.phone = phone;
+    if (phone) clinic.phone = String(phone).trim();
+    if (name && String(name).trim()) clinic.name = String(name).trim().slice(0, 150);
 
     await clinic.save();
 
     await AuditLog.create({
       clinicId: req.clinicId,
-      userId: req.user._id,
+      userId: /^[0-9a-f]{24}$/i.test(String(req.user._id)) ? req.user._id : undefined,
       action: 'CLINIC_SETTINGS_UPDATED',
       resource: 'Clinic',
       resourceId: clinic._id.toString(),

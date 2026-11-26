@@ -1,48 +1,37 @@
 /**
- * Gmail Polling Service - Surveillance automatique de la boîte Gmail du médecin
- * 
- * Ce service surveille en temps réel la boîte Gmail du Dr. Rayen B. (rayen.9b7@gmail.com)
- * et transmet automatiquement chaque nouveau message entrant à l'IA pour traitement.
- * 
- * Polling toutes les 30 secondes.
- * Stockage du lastHistoryId en fichier pour reprendre après redémarrage.
+ * Gmail Polling Service — surveillance de la boîte centrale MediLawAI.
+ *
+ * Toutes les 30 s : lit les nouveaux e-mails non lus de la boîte de réception,
+ * les transmet au moteur centralisé (identification praticien, IA, réservation)
+ * qui répond automatiquement dans le même fil Gmail.
+ *
+ * Idempotence : identifiants Gmail traités conservés dans data/gmail_polling_state.json.
  */
 
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { decryptData } from './cryptoService.js';
+import { getValidGmailAccessToken, readIntegrationsConfig, getCentralMailboxEmail } from './googleAuthService.js';
+import { markGmailMessageAsRead } from './gmailSenderService.js';
+import { processIncomingEmail } from './centralEmailRouter.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_FILE_PATH = path.resolve('data/integrations_config.json');
 const POLLING_STATE_FILE = path.resolve('data/gmail_polling_state.json');
+const POLL_INTERVAL_MS = Number(process.env.GMAIL_POLL_INTERVAL_MS) || 30 * 1000;
+const SEARCH_QUERY = process.env.GMAIL_POLL_QUERY || 'in:inbox is:unread -from:me newer_than:3d';
 
-const POLL_INTERVAL_MS = 30 * 1000; // 30 secondes
 let pollingTimer = null;
 let isPolling = false;
-
-// ─── Helpers fichier ─────────────────────────────────────────────────────────
-
-function readConfig() {
-  try {
-    if (fs.existsSync(CONFIG_FILE_PATH)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE_PATH, 'utf8'));
-    }
-  } catch {}
-  return {};
-}
+let lastError = null;
 
 function readPollingState() {
   try {
-    if (fs.existsSync(POLLING_STATE_FILE)) {
-      return JSON.parse(fs.readFileSync(POLLING_STATE_FILE, 'utf8'));
-    }
+    if (fs.existsSync(POLLING_STATE_FILE)) return JSON.parse(fs.readFileSync(POLLING_STATE_FILE, 'utf8'));
   } catch {}
   return {};
 }
 
-function writePollingState(state) {
+function writePollingState(partial) {
   try {
+    const state = { ...readPollingState(), ...partial };
     const dir = path.dirname(POLLING_STATE_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(POLLING_STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
@@ -51,295 +40,209 @@ function writePollingState(state) {
   }
 }
 
-// ─── Gestion des tokens OAuth2 ───────────────────────────────────────────────
-
-async function getValidAccessToken(googleCfg) {
-  const { encryptedTokens, tokenExpiry } = googleCfg;
-  if (!encryptedTokens) return null;
-
-  let tokens;
-  try {
-    tokens = decryptData(encryptedTokens);
-  } catch (e) {
-    console.warn('[Gmail Polling] Impossible de déchiffrer les tokens:', e.message);
-    return null;
-  }
-
-  // Si token encore valide (5 min de marge)
-  if (tokens.expiryDate && Date.now() < tokens.expiryDate - 300000) {
-    return tokens.accessToken;
-  }
-
-  // Rafraîchir le token avec le refresh_token
-  if (!tokens.refreshToken) {
-    console.warn('[Gmail Polling] Pas de refresh_token disponible.');
-    return null;
-  }
-
-  try {
-    const clientId = googleCfg.clientId || process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    if (!clientSecret) {
-      console.warn('[Gmail Polling] GOOGLE_CLIENT_SECRET manquant dans .env');
-      return null;
-    }
-
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: tokens.refreshToken,
-        grant_type: 'refresh_token',
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('[Gmail Polling] Échec refresh token:', err);
-      return null;
-    }
-
-    const newTokenData = await response.json();
-    const newTokens = {
-      ...tokens,
-      accessToken: newTokenData.access_token,
-      expiryDate: Date.now() + (newTokenData.expires_in * 1000),
-    };
-
-    // Sauvegarder les tokens rafraîchis
-    const { encryptData } = await import('./cryptoService.js');
-    const newEncrypted = encryptData(newTokens);
-    const config = readConfig();
-    config.googleWorkspace = {
-      ...(config.googleWorkspace || {}),
-      encryptedTokens: newEncrypted,
-      tokenExpiry: newTokens.expiryDate,
-    };
-    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(config, null, 2), 'utf8');
-
-    console.log('[Gmail Polling] Token rafraîchi avec succès.');
-    return newTokenData.access_token;
-  } catch (e) {
-    console.error('[Gmail Polling] Erreur refresh token:', e.message);
-    return null;
-  }
+function decodeBase64Url(data = '') {
+  return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
 }
 
-// ─── Lecture des nouveaux e-mails Gmail ──────────────────────────────────────
+function htmlToText(html = '') {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr)>/gi, '\n')
+    .replace(/<blockquote[\s\S]*?<\/blockquote>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n+/g, '\n')
+    .trim();
+}
 
-async function fetchNewEmails(accessToken, doctorEmail) {
-  try {
-    // Récupérer les messages non lus récents (moins de 2 minutes pour éviter les doublons)
-    const twoMinutesAgo = Math.floor((Date.now() - 2 * 60 * 1000) / 1000);
-    const query = `is:unread after:${twoMinutesAgo}`;
-    
-    const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=10`;
-    const listRes = await fetch(listUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+/**
+ * Extrait le corps texte (text/plain prioritaire, sinon text/html converti).
+ */
+export function extractBody(payload) {
+  let plain = '';
+  let html = '';
+  const walk = (part) => {
+    if (!part) return;
+    if (part.mimeType === 'text/plain' && part.body?.data && !plain) plain = decodeBase64Url(part.body.data);
+    else if (part.mimeType === 'text/html' && part.body?.data && !html) html = decodeBase64Url(part.body.data);
+    (part.parts || []).forEach(walk);
+  };
+  walk(payload);
+  if (!plain && !html && payload?.body?.data) plain = decodeBase64Url(payload.body.data);
+  return { text: plain || htmlToText(html), html };
+}
 
-    if (!listRes.ok) {
-      const err = await listRes.text();
-      console.error('[Gmail Polling] Erreur liste messages:', err);
-      return [];
-    }
+/**
+ * Retire l'historique cité (« Le ... a écrit : », lignes « > ») pour n'analyser
+ * que le nouveau message du patient.
+ */
+export function stripQuotedReply(text = '') {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  for (const line of lines) {
+    if (/^\s*(le|on)\s.+(a écrit|a ecrit|wrote)\s*:?\s*$/i.test(line)) break;
+    if (/^\s*-{2,}\s*(message d'origine|original message|forwarded message)/i.test(line)) break;
+    if (/^\s*(de|from)\s*:\s*.+@/i.test(line) && out.length) break;
+    if (/^\s*>/.test(line)) continue;
+    out.push(line);
+  }
+  const result = out.join('\n').trim();
+  return result || text.trim();
+}
 
-    const listData = await listRes.json();
-    const messages = listData.messages || [];
-    
-    // Lire l'état pour éviter les doublons
-    const state = readPollingState();
-    const processedIds = new Set(state.processedMessageIds || []);
-    
-    const newMessages = messages.filter(m => !processedIds.has(m.id));
-    if (newMessages.length === 0) return [];
+function parseAddress(header = '') {
+  const m = header.match(/^\s*(?:"?([^"<]*?)"?\s*)?<([^>]+)>\s*$/);
+  if (m) return { name: (m[1] || '').trim(), email: m[2].trim().toLowerCase() };
+  return { name: '', email: header.trim().toLowerCase() };
+}
 
-    console.log(`[Gmail Polling] ${newMessages.length} nouveau(x) e-mail(s) détecté(s) pour ${doctorEmail}`);
+async function gmailGet(url, accessToken) {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error(`Gmail API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
 
-    const emails = [];
-    for (const msg of newMessages) {
-      try {
-        const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        if (!msgRes.ok) continue;
-        
-        const msgData = await msgRes.json();
-        const headers = msgData.payload?.headers || [];
-        
-        const getHeader = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
-        
-        const fromHeader = getHeader('From');
-        const toHeader = getHeader('To');
-        const subject = getHeader('Subject');
-        const date = getHeader('Date');
-        
-        // Extraire email et nom de l'expéditeur
-        const fromMatch = fromHeader.match(/^(?:"?([^"<]+)"?\s*)?<?([^>]+)>?$/);
-        const senderName = fromMatch?.[1]?.trim() || fromHeader;
-        const senderEmail = fromMatch?.[2]?.trim() || fromHeader;
-        
-        // Extraire le corps du message
-        let body = '';
-        const getBody = (payload) => {
-          if (payload.body?.data) {
-            return Buffer.from(payload.body.data, 'base64').toString('utf8');
-          }
-          if (payload.parts) {
-            for (const part of payload.parts) {
-              if (part.mimeType === 'text/plain' || part.mimeType === 'text/html') {
-                if (part.body?.data) {
-                  return Buffer.from(part.body.data, 'base64').toString('utf8');
-                }
-              }
-              if (part.parts) {
-                const nested = getBody(part);
-                if (nested) return nested;
-              }
-            }
-          }
-          return '';
-        };
-        
-        body = getBody(msgData.payload).replace(/<[^>]+>/g, ' ').trim(); // Supprimer HTML tags
-        
-        emails.push({
-          gmailMessageId: msg.id,
-          senderName,
-          senderEmail,
-          toEmail: doctorEmail,
-          subject,
-          body,
-          receivedAt: new Date(date || Date.now()).toISOString(),
-        });
-      } catch (e) {
-        console.warn(`[Gmail Polling] Erreur lecture message ${msg.id}:`, e.message);
+async function fetchNewEmails(accessToken) {
+  const listData = await gmailGet(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(SEARCH_QUERY)}&maxResults=20`,
+    accessToken
+  );
+  const messages = listData.messages || [];
+  const state = readPollingState();
+  const processedIds = new Set(state.processedMessageIds || []);
+  const fresh = messages.filter(m => !processedIds.has(m.id)).reverse(); // plus ancien d'abord
+
+  const mailbox = getCentralMailboxEmail();
+  const emails = [];
+  for (const msg of fresh) {
+    try {
+      const data = await gmailGet(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`, accessToken);
+      const headers = data.payload?.headers || [];
+      const h = (name) => headers.find(x => x.name.toLowerCase() === name.toLowerCase())?.value || '';
+
+      const from = parseAddress(h('From'));
+      const autoSubmitted = h('Auto-Submitted');
+      const precedence = h('Precedence').toLowerCase();
+      const skip = from.email === mailbox
+        || (autoSubmitted && autoSubmitted.toLowerCase() !== 'no')
+        || ['bulk', 'list', 'junk'].includes(precedence)
+        || Boolean(h('List-Unsubscribe'))
+        || h('X-MediLawAI');
+
+      if (skip) {
+        emails.push({ gmailMessageId: msg.id, skip: true, reason: 'AUTOMATED_OR_SELF' });
+        continue;
       }
+
+      const { text, html } = extractBody(data.payload);
+      emails.push({
+        gmailMessageId: msg.id,
+        threadId: data.threadId,
+        rfcMessageId: h('Message-ID') || h('Message-Id'),
+        references: h('References'),
+        senderName: from.name,
+        senderEmail: from.email,
+        recipient: (parseAddress((h('Delivered-To') || h('To')).split(',')[0]).email) || mailbox,
+        subject: h('Subject'),
+        body: stripQuotedReply(text),
+        bodyHtml: html,
+        receivedAt: data.internalDate ? new Date(Number(data.internalDate)).toISOString() : new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn(`[Gmail Polling] Lecture message ${msg.id} impossible:`, e.message);
     }
-
-    // Marquer comme traités
-    const updatedIds = [...processedIds, ...newMessages.map(m => m.id)].slice(-500); // Garder max 500
-    writePollingState({ processedMessageIds: updatedIds, lastPollAt: new Date().toISOString() });
-
-    return emails;
-  } catch (e) {
-    console.error('[Gmail Polling] Erreur fetchNewEmails:', e.message);
-    return [];
   }
+  return emails;
 }
 
-// ─── Envoyer les e-mails à l'IA pour traitement ──────────────────────────────
-
-async function processEmailWithAI(email) {
-  try {
-    const response = await fetch('http://localhost:5000/api/emails/ingest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        senderName: email.senderName,
-        senderEmail: email.senderEmail,
-        toEmail: email.toEmail,
-        subject: email.subject,
-        body: email.body,
-        receivedAt: email.receivedAt,
-        source: 'GMAIL_REAL',
-        gmailMessageId: email.gmailMessageId,
-      }),
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      console.log(`[Gmail Polling] ✅ E-mail de "${email.senderName} <${email.senderEmail}>" traité par l'IA. Intent: ${result.email?.intent || 'UNKNOWN'}`);
-    } else {
-      console.warn(`[Gmail Polling] ⚠️ Erreur traitement IA pour ${email.senderEmail}:`, response.status);
-    }
-  } catch (e) {
-    console.error('[Gmail Polling] Erreur appel API emails/ingest:', e.message);
-  }
+function markProcessed(id) {
+  const state = readPollingState();
+  const ids = [...(state.processedMessageIds || []), id].slice(-1000);
+  writePollingState({ processedMessageIds: ids });
 }
 
-// ─── Boucle principale de polling ────────────────────────────────────────────
-
-async function pollGmail() {
-  if (isPolling) return; // Éviter les chevauchements
+export async function pollGmailOnce() {
+  if (isPolling) return { skipped: true };
   isPolling = true;
-  
+  const summary = { fetched: 0, processed: 0, replied: 0, skipped: 0 };
   try {
-    const config = readConfig();
-    const googleCfg = config.googleWorkspace || {};
-    
-    // Vérifier que la connexion OAuth est active
-    if (googleCfg.connectionStatus !== 'CONNECTED' || !googleCfg.encryptedTokens) {
-      // Mode silencieux : pas encore connecté
-      return;
-    }
-    
-    const doctorEmail = googleCfg.doctorEmail || 'rayen.9b7@gmail.com';
-    const accessToken = await getValidAccessToken(googleCfg);
-    
+    const cfg = readIntegrationsConfig().googleWorkspace || {};
+    if (!cfg.encryptedTokens) return { ...summary, connected: false };
+
+    const accessToken = await getValidGmailAccessToken();
     if (!accessToken) {
-      console.warn('[Gmail Polling] ⚠️ Impossible d\'obtenir un access token valide. Reconnexion OAuth requise.');
-      return;
+      lastError = 'Access token indisponible : reconnectez Google OAuth.';
+      console.warn(`[Gmail Polling] ⚠️ ${lastError}`);
+      return { ...summary, connected: false, error: lastError };
     }
-    
-    const newEmails = await fetchNewEmails(accessToken, doctorEmail);
-    
-    for (const email of newEmails) {
-      await processEmailWithAI(email);
-    }
-    
-    if (newEmails.length === 0) {
-      // Log discret toutes les 5 minutes seulement
-      const state = readPollingState();
-      const lastLog = state.lastQuietLog || 0;
-      if (Date.now() - lastLog > 5 * 60 * 1000) {
-        console.log(`[Gmail Polling] 📭 Aucun nouveau message pour ${doctorEmail}`);
-        writePollingState({ ...state, lastQuietLog: Date.now() });
+
+    const emails = await fetchNewEmails(accessToken);
+    summary.fetched = emails.length;
+
+    for (const email of emails) {
+      if (email.skip) {
+        markProcessed(email.gmailMessageId);
+        summary.skipped++;
+        continue;
+      }
+      try {
+        const result = await processIncomingEmail({ ...email, autoSend: true });
+        markProcessed(email.gmailMessageId);
+        await markGmailMessageAsRead(email.gmailMessageId);
+        summary.processed++;
+        if (result.reply?.sent) summary.replied++;
+        console.log(`[Gmail Polling] ✅ ${email.senderEmail} | "${email.subject}" → ${result.decision || result.reason} | réponse ${result.reply?.sent ? 'envoyée' : 'en brouillon (' + (result.reply?.reason || '-') + ')'}`);
+      } catch (e) {
+        // Non marqué comme traité : nouvel essai au prochain cycle
+        console.error(`[Gmail Polling] Erreur traitement ${email.gmailMessageId}:`, e.message);
       }
     }
+
+    lastError = null;
+    writePollingState({ lastPollAt: new Date().toISOString(), lastSummary: summary });
+    return { ...summary, connected: true };
   } catch (e) {
-    console.error('[Gmail Polling] Erreur cycle polling:', e.message);
+    lastError = e.message;
+    console.error('[Gmail Polling] Erreur cycle:', e.message);
+    return { ...summary, error: e.message };
   } finally {
     isPolling = false;
   }
 }
 
-// ─── API publique ────────────────────────────────────────────────────────────
-
 export function startGmailPolling() {
-  if (pollingTimer) return; // Déjà démarré
-  
-  console.log(`[Gmail Polling] 🚀 Service démarré - surveillance toutes les ${POLL_INTERVAL_MS / 1000}s`);
-  
-  // Premier poll immédiat
-  pollGmail();
-  
-  // Poll périodique
-  pollingTimer = setInterval(pollGmail, POLL_INTERVAL_MS);
+  if (pollingTimer || process.env.GMAIL_POLLING_DISABLED === 'true') return;
+  console.log(`[Gmail Polling] 🚀 Surveillance de la boîte centrale toutes les ${POLL_INTERVAL_MS / 1000}s`);
+  setTimeout(pollGmailOnce, 3000); // laisser MongoDB se connecter
+  pollingTimer = setInterval(pollGmailOnce, POLL_INTERVAL_MS);
 }
 
 export function stopGmailPolling() {
   if (pollingTimer) {
     clearInterval(pollingTimer);
     pollingTimer = null;
-    console.log('[Gmail Polling] ⏹ Service arrêté.');
   }
 }
 
 export function getPollingStatus() {
-  const config = readConfig();
-  const googleCfg = config.googleWorkspace || {};
+  const cfg = readIntegrationsConfig().googleWorkspace || {};
   const state = readPollingState();
-  
   return {
     active: pollingTimer !== null,
-    connected: googleCfg.connectionStatus === 'CONNECTED' && !!googleCfg.encryptedTokens,
-    doctorEmail: googleCfg.doctorEmail || 'rayen.9b7@gmail.com',
+    connected: Boolean(cfg.encryptedTokens) && cfg.connectionStatus === 'CONNECTED',
+    mailbox: getCentralMailboxEmail(),
+    query: SEARCH_QUERY,
     lastPollAt: state.lastPollAt || null,
+    lastSummary: state.lastSummary || null,
     processedCount: (state.processedMessageIds || []).length,
     intervalSeconds: POLL_INTERVAL_MS / 1000,
+    lastError,
   };
 }

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Building2, 
-  ShieldCheck, 
-  Sliders, 
-  Bell, 
-  Lock, 
-  UserCheck, 
+import { API_BASE_URL, apiClient, apiErrorMessage } from '../../services/apiClient';
+import {
+  Building2,
+  ShieldCheck,
+  Sliders,
+  Bell,
+  Lock,
+  UserCheck,
   Sparkles,
   Key,
   Globe,
@@ -26,9 +27,9 @@ import {
   EyeOff
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
-import { 
-  apiGetGoogleStatus, 
-  apiGetGoogleConnectUrl, 
+import {
+  apiGetGoogleStatus,
+  apiGetGoogleConnectUrl,
   apiDisconnectGoogle,
   apiDirectConnectGoogle,
   apiGetWhatsAppStatus,
@@ -51,76 +52,63 @@ interface DoctorOption {
 }
 
 export const EnterpriseSettingsView: React.FC = () => {
-  const { 
-    sector, 
-    organizationName, 
-    setOrganizationName, 
-    aiAutonomyLevel, 
+  const {
+    sector,
+    organizationName,
+    setOrganizationName,
+    aiAutonomyLevel,
     setAiAutonomyLevel,
     confidenceThreshold,
     setConfidenceThreshold,
-    showToast 
+    showToast
   } = useAppStore();
 
-  const [emergencyPhone, setEmergencyPhone] = useState('+216 98 111 222');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
   const [openingHours, setOpeningHours] = useState('08:30 - 17:30');
   const [activeSection, setActiveSection] = useState<'all' | 'ai' | 'google' | 'cabinet'>('all');
 
-  // État de l'intégration Google Workspace (Gmail + Google Calendar)
+  // État RÉEL de l'intégration Google (boîte centrale Gmail + agenda) — renvoyé par le serveur
   const [googleStatus, setGoogleStatus] = useState<{
     connected: boolean;
+    configured?: boolean;
+    canSendEmails?: boolean;
     email?: string;
     scopes?: string[];
     syncStatus?: string;
     calendarId?: string;
     lastSyncAt?: string;
-  }>({
-    connected: true,
-    email: localStorage.getItem('medilaw_saved_doctor_email') || 'rayen.9b7@gmail.com',
-    scopes: [
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
-    ],
-    syncStatus: 'ACTIVE',
-    calendarId: 'primary',
-    lastSyncAt: 'À l’instant'
-  });
+    polling?: any;
+  }>({ connected: false, email: '' });
   const [loadingGoogle, setLoadingGoogle] = useState(false);
 
   // Modal Configuration Google Workspace
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [showAdvancedDevSettings, setShowAdvancedDevSettings] = useState(false);
-  const [googleClientId, setGoogleClientId] = useState('531458977181-vmvhvudmd4njd9brog0sjk301cs8168s.apps.googleusercontent.com');
+  const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
-  const [googleRedirectUri, setGoogleRedirectUri] = useState('http://localhost:5000/api/integrations/google/callback');
+  const [googleRedirectUri, setGoogleRedirectUri] = useState(`${API_BASE_URL}/api/integrations/google/callback`);
   const [gmailEnabled, setGmailEnabled] = useState(true);
   const [calendarEnabled, setCalendarEnabled] = useState(true);
-  const [hasStoredSecret, setHasStoredSecret] = useState(true);
+  const [hasStoredSecret, setHasStoredSecret] = useState(false);
   const [savingGoogle, setSavingGoogle] = useState(false);
 
-  // Multi-docteur pour emails individuels
+  // Praticiens du cabinet
   const [doctorsList, setDoctorsList] = useState<DoctorOption[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
-  const [doctorIndividualEmail, setDoctorIndividualEmail] = useState<string>(() => localStorage.getItem('medilaw_saved_doctor_email') || 'rayen.9b7@gmail.com');
+  const [doctorIndividualEmail, setDoctorIndividualEmail] = useState<string>('');
 
-  // État WhatsApp Business
+  // État WhatsApp Business (réel)
   const [whatsAppStatus, setWhatsAppStatus] = useState<{
     connected: boolean;
     phoneNumber?: string;
     lastSyncAt?: string;
-  }>({
-    connected: true,
-    phoneNumber: '+216 98 111 222',
-    lastSyncAt: 'Actif'
-  });
+  }>({ connected: false });
   const [loadingWhatsApp, setLoadingWhatsApp] = useState(false);
 
   // Modal Configuration WhatsApp Business API
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
-  const [whatsAppPhoneNumber, setWhatsAppPhoneNumber] = useState('+216 98 111 222');
+  const [whatsAppPhoneNumber, setWhatsAppPhoneNumber] = useState('');
   const [whatsAppAccessToken, setWhatsAppAccessToken] = useState('');
   const [showWhatsAppToken, setShowWhatsAppToken] = useState(false);
   const [whatsAppBusinessAccountId, setWhatsAppBusinessAccountId] = useState('');
@@ -129,7 +117,29 @@ export const EnterpriseSettingsView: React.FC = () => {
   const [hasStoredToken, setHasStoredToken] = useState(false);
   const [savingWhatsApp, setSavingWhatsApp] = useState(false);
 
-  // État de test et rapport de synchronisation
+  // Lecture immédiate de la boîte + test du moteur
+  const [replyMode, setReplyMode] = useState<'auto' | 'hitl'>('auto');
+  const [replyModeLocked, setReplyModeLocked] = useState(false);
+  useEffect(() => {
+    apiClient.get('/api/integrations/ai-settings').then(({ data }) => {
+      setReplyMode(data.autoReplyMode);
+      setReplyModeLocked(Boolean(data.lockedByServer));
+    }).catch(() => {});
+  }, []);
+  const saveReplyMode = async (mode: 'auto' | 'hitl') => {
+    if (replyModeLocked || mode === replyMode) return;
+    const previous = replyMode;
+    setReplyMode(mode);
+    try {
+      await apiClient.put('/api/integrations/ai-settings', { autoReplyMode: mode });
+      setAiAutonomyLevel(mode === 'hitl' ? 'SUPERVISED' : 'AUTONOMOUS');
+      showToast({ title: 'Mode enregistré', message: mode === 'auto' ? 'Les réponses claires partent automatiquement.' : 'Toutes les réponses attendent votre validation.', type: 'success' });
+    } catch (err: any) {
+      setReplyMode(previous);
+      showToast({ title: 'Non enregistré', message: apiErrorMessage(err), type: 'danger' });
+    }
+  };
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncReportModal, setShowSyncReportModal] = useState(false);
   const [syncReport, setSyncReport] = useState<any>(null);
@@ -154,18 +164,10 @@ export const EnterpriseSettingsView: React.FC = () => {
       const res = await apiGetPracticeDoctors();
       if (res && res.doctors && res.doctors.length > 0) {
         setDoctorsList(res.doctors);
-        const primary = res.doctors[0];
-        setSelectedDoctorId(primary._id);
-        const saved = localStorage.getItem('medilaw_saved_doctor_email');
-        setDoctorIndividualEmail(saved || primary.professionalEmail || 'rayen.9b7@gmail.com');
+        setSelectedDoctorId(res.doctors[0]._id);
       }
     } catch {
-      const saved = localStorage.getItem('medilaw_saved_doctor_email') || 'rayen.9b7@gmail.com';
-      setDoctorsList([
-        { _id: 'doc-rayen', name: 'Dr. Rayen B.', professionalEmail: saved, specialty: 'Cardiologie & Médecine Générale' }
-      ]);
-      setSelectedDoctorId('doc-rayen');
-      setDoctorIndividualEmail(saved);
+      setDoctorsList([]);
     }
   };
 
@@ -173,21 +175,15 @@ export const EnterpriseSettingsView: React.FC = () => {
     try {
       const res = await apiGetGoogleWorkspaceConfig();
       if (res) {
-        setGoogleClientId(res.clientId || '531458977181-vmvhvudmd4njd9brog0sjk301cs8168s.apps.googleusercontent.com');
-        setGoogleRedirectUri(res.redirectUri || 'http://localhost:5000/api/integrations/google/callback');
+        setGoogleClientId(res.clientId || '');
+        setGoogleRedirectUri(res.redirectUri || `${API_BASE_URL}/api/integrations/google/callback`);
         setGmailEnabled(res.gmailEnabled !== false);
         setCalendarEnabled(res.calendarEnabled !== false);
-        setHasStoredSecret(true);
-        const saved = localStorage.getItem('medilaw_saved_doctor_email');
-        const email = saved || res.doctorEmail || 'rayen.9b7@gmail.com';
-        setDoctorIndividualEmail(email);
-        setGoogleStatus(prev => ({ ...prev, email }));
-        if (res.doctorId) {
-          setSelectedDoctorId(res.doctorId);
-        }
+        setHasStoredSecret(Boolean(res.hasSecret));
+        if (res.doctorEmail) setDoctorIndividualEmail(res.doctorEmail);
       }
     } catch {
-      // ignore
+      // configuration absente : formulaire vide
     }
   };
 
@@ -195,112 +191,107 @@ export const EnterpriseSettingsView: React.FC = () => {
     try {
       const res = await apiGetWhatsAppConfig();
       if (res) {
-        setWhatsAppPhoneNumber(res.phoneNumber || '+216 98 111 222');
+        setWhatsAppPhoneNumber(res.phoneNumber || '');
         setWhatsAppBusinessAccountId(res.businessAccountId || '');
         setWhatsAppPhoneNumberId(res.phoneNumberId || '');
         setWhatsAppEnabled(res.enabled !== false);
         setHasStoredToken(!!res.hasToken);
         setWhatsAppStatus({
-          connected: !!res.isConfigured,
-          phoneNumber: res.phoneNumber || '+216 98 111 222',
-          lastSyncAt: res.isConfigured ? 'Actif' : 'Non configuré'
+          connected: !!res.isConfigured && !!res.hasToken,
+          phoneNumber: res.phoneNumber || '',
+          lastSyncAt: res.isConfigured && res.hasToken ? 'Configuré' : 'Non configuré'
         });
       }
     } catch {
-      // ignore
+      setWhatsAppStatus({ connected: false });
     }
+  };
+
+  const formatSync = (v?: string | null) => {
+    if (!v) return '—';
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
 
   const loadGoogleIntegrationStatus = async () => {
     try {
       const res = await apiGetGoogleStatus();
-      const savedEmail = localStorage.getItem('medilaw_saved_doctor_email');
-      const finalEmail = savedEmail || res?.email || res?.providerAccountEmail || doctorIndividualEmail || 'rayen.9b7@gmail.com';
       setGoogleStatus({
-        connected: true,
-        email: finalEmail,
+        connected: Boolean(res?.connected),
+        configured: Boolean(res?.configured),
+        canSendEmails: Boolean(res?.canSendEmails),
+        email: res?.email || '',
         scopes: res?.scopes || [],
-        syncStatus: 'ACTIVE',
-        calendarId: 'primary',
-        lastSyncAt: 'À l’instant'
+        syncStatus: res?.status,
+        calendarId: res?.calendarId || 'primary',
+        lastSyncAt: formatSync(res?.polling?.lastPollAt || res?.lastSynchronization),
+        polling: res?.polling,
       });
-      setDoctorIndividualEmail(finalEmail);
+      if (res?.email) setDoctorIndividualEmail(res.email);
     } catch {
-      // Garder l'état
+      setGoogleStatus({ connected: false, email: '' });
     }
   };
 
-  const handleSaveGeneral = () => {
-    showToast({
-      title: 'Paramètres enregistrés !',
-      message: 'Les réglages d’autonomie IA, de cabinet et d’escalade ont été sauvegardés.',
-      type: 'success'
-    });
+  // Informations du cabinet (nom, téléphone d'astreinte) enregistrées sur le serveur
+  useEffect(() => {
+    apiClient.get('/api/clinics/current').then(({ data }) => {
+      if (data?.name) setOrganizationName(data.name);
+      if (data?.phone) setEmergencyPhone(data.phone);
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveGeneral = async () => {
+    try {
+      await apiClient.put('/api/clinics/settings', { name: organizationName, phone: emergencyPhone });
+      showToast({ title: 'Cabinet mis à jour', message: 'Nom et téléphone d’astreinte enregistrés.', type: 'success' });
+    } catch (err: any) {
+      showToast({ title: 'Non enregistré', message: apiErrorMessage(err), type: 'danger' });
+    }
   };
 
-  // Enregistrement réel Configuration Google Workspace
+  // Enregistre Client ID / Secret / adresse de la boîte centrale
+  const saveGoogleConfig = async () => {
+    const docEmail = doctorIndividualEmail.trim();
+    await apiSaveGoogleWorkspaceConfig({
+      clientId: googleClientId.trim(),
+      clientSecret: googleClientSecret.trim() || undefined,
+      redirectUri: googleRedirectUri.trim(),
+      gmailEnabled,
+      calendarEnabled,
+      doctorEmail: docEmail || undefined,
+      doctorId: selectedDoctorId || undefined
+    } as any);
+    if (googleClientSecret.trim()) setHasStoredSecret(true);
+    setGoogleClientSecret('');
+  };
+
   const handleSaveGoogleConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const finalClientId = googleClientId.trim() || '531458977181-vmvhvudmd4njd9brog0sjk301cs8168s.apps.googleusercontent.com';
-    const finalRedirectUri = googleRedirectUri.trim() || 'http://localhost:5000/api/integrations/google/callback';
-
+    if (!googleClientId.trim()) {
+      showToast({ title: 'Client ID requis', message: 'Collez le Client ID OAuth fourni par Google Cloud Console.', type: 'warning' });
+      return;
+    }
     setSavingGoogle(true);
-    const docEmail = doctorIndividualEmail.trim() || 'rayen.9b7@gmail.com';
-    localStorage.setItem('medilaw_saved_doctor_email', docEmail);
     try {
-      await apiSaveGoogleWorkspaceConfig({
-        clientId: finalClientId,
-        clientSecret: googleClientSecret.trim() || undefined,
-        redirectUri: finalRedirectUri,
-        gmailEnabled,
-        calendarEnabled,
-        doctorEmail: docEmail,
-        doctorId: selectedDoctorId || undefined
-      });
-      await apiDirectConnectGoogle({ email: docEmail, doctorId: selectedDoctorId || undefined });
-
-      setGoogleStatus(prev => ({
-        ...prev,
-        connected: true,
-        email: docEmail
-      }));
-      setHasStoredSecret(true);
+      await saveGoogleConfig();
+      await loadGoogleIntegrationStatus();
       setShowGoogleModal(false);
-      showToast({
-        title: 'Configuration Google enregistrée !',
-        message: `Les identifiants Google Workspace et l'adresse ${docEmail} ont été associés avec succès.`,
-        type: 'success'
-      });
+      showToast({ title: 'Configuration Google enregistrée', message: 'Cliquez ensuite sur « Autoriser avec Google » pour connecter la boîte.', type: 'success' });
     } catch (err: any) {
-      setGoogleStatus(prev => ({
-        ...prev,
-        connected: true,
-        email: docEmail
-      }));
-      setHasStoredSecret(true);
-      setShowGoogleModal(false);
-      showToast({
-        title: 'Configuration Google enregistrée !',
-        message: `Les identifiants Google Workspace et l'adresse ${docEmail} ont été associés avec succès.`,
-        type: 'success'
-      });
+      showToast({ title: 'Enregistrement impossible', message: apiErrorMessage(err), type: 'danger' });
     } finally {
       setSavingGoogle(false);
     }
   };
 
-  // Enregistrement réel Configuration WhatsApp Business API
+  // Enregistrement Configuration WhatsApp Business API
   const handleSaveWhatsAppConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!whatsAppPhoneNumber.trim()) {
-      showToast({
-        title: 'Numéro requis',
-        message: 'Veuillez saisir un numéro de téléphone WhatsApp valide.',
-        type: 'warning'
-      });
+      showToast({ title: 'Numéro requis', message: 'Veuillez saisir un numéro de téléphone WhatsApp valide.', type: 'warning' });
       return;
     }
-
     setSavingWhatsApp(true);
     try {
       await apiSaveWhatsAppConfig({
@@ -310,229 +301,86 @@ export const EnterpriseSettingsView: React.FC = () => {
         phoneNumberId: whatsAppPhoneNumberId.trim(),
         enabled: whatsAppEnabled
       });
-
-      setWhatsAppStatus({
-        connected: true,
-        phoneNumber: whatsAppPhoneNumber.trim(),
-        lastSyncAt: 'Actif'
-      });
-      setHasStoredToken(true);
+      await loadWhatsAppConfig();
       setShowWhatsAppModal(false);
-      showToast({
-        title: 'WhatsApp Business Configuré !',
-        message: `Rappels automatiques activés sur le numéro ${whatsAppPhoneNumber}.`,
-        type: 'success'
-      });
+      showToast({ title: 'WhatsApp Business enregistré', message: `Numéro ${whatsAppPhoneNumber} enregistré.`, type: 'success' });
     } catch (err: any) {
-      showToast({
-        title: 'Erreur WhatsApp',
-        message: err.response?.data?.message || 'Erreur lors de la sauvegarde WhatsApp.',
-        type: 'error'
-      });
+      showToast({ title: 'Erreur WhatsApp', message: apiErrorMessage(err, 'Erreur lors de la sauvegarde WhatsApp.'), type: 'danger' });
     } finally {
       setSavingWhatsApp(false);
     }
   };
 
+  // Connexion OAuth réelle : enregistrement des identifiants puis redirection vers Google
   const handleConnectGoogleOAuth = async () => {
     setLoadingGoogle(true);
-    const docEmail = doctorIndividualEmail.trim() || localStorage.getItem('medilaw_saved_doctor_email') || 'rayen.9b7@gmail.com';
-    localStorage.setItem('medilaw_saved_doctor_email', docEmail);
-    const cId = googleClientId.trim() || '531458977181-vmvhvudmd4njd9brog0sjk301cs8168s.apps.googleusercontent.com';
-
     try {
-      // 1. Sauvegarder automatiquement les identifiants configurés
-      await apiSaveGoogleWorkspaceConfig({
-        clientId: cId,
-        clientSecret: googleClientSecret.trim() || undefined,
-        redirectUri: googleRedirectUri.trim(),
-        gmailEnabled,
-        calendarEnabled,
-        doctorEmail: docEmail,
-        doctorId: selectedDoctorId || undefined
-      });
-
-      // 2. Si un vrai Client ID et Client Secret sont fournis, ouvrir la fenêtre Google OAuth
-      if (googleClientId.trim() && googleClientSecret.trim()) {
-        try {
-          const res = await apiGetGoogleConnectUrl();
-          const targetUrl = res?.authUrl || res?.url;
-          if (targetUrl) {
-            window.open(targetUrl, '_blank');
-          }
-        } catch (oauthErr) {
-          console.warn('Redirection OAuth:', oauthErr);
-        }
-      }
-
-      // 3. Activer immédiatement la connexion et l'association d'e-mail pour ce médecin
-      await apiDirectConnectGoogle({ email: docEmail, doctorId: selectedDoctorId || undefined });
-      setGoogleStatus({
-        connected: true,
-        email: docEmail,
-        syncStatus: 'ACTIVE',
-        calendarId: 'primary',
-        lastSyncAt: 'À l’instant'
-      });
-      setShowGoogleModal(false);
-      showToast({
-        title: 'Google OAuth Autorisé !',
-        message: `Compte Google Workspace (${docEmail}) connecté avec succès (Gmail & Calendar).`,
-        type: 'success'
-      });
+      if (googleClientId.trim()) await saveGoogleConfig();
+      const res = await apiGetGoogleConnectUrl();
+      const targetUrl = res?.authUrl || res?.url;
+      if (!targetUrl) throw new Error('URL d’autorisation Google indisponible.');
+      // Retour automatique sur l'application après consentement (?google_connected=success)
+      window.location.href = targetUrl;
     } catch (err: any) {
-      // Fallback résilient : activer directement pour garantir la continuité de service
-      try {
-        await apiDirectConnectGoogle({ email: docEmail, doctorId: selectedDoctorId || undefined });
-        setGoogleStatus({
-          connected: true,
-          email: docEmail,
-          syncStatus: 'ACTIVE',
-          calendarId: 'primary',
-          lastSyncAt: 'À l’instant'
-        });
-        setShowGoogleModal(false);
-        showToast({
-          title: 'Google OAuth Connecté',
-          message: `Connexion active pour ${docEmail}.`,
-          type: 'success'
-        });
-      } catch (fallbackErr: any) {
-        showToast({
-          title: 'Erreur',
-          message: err.response?.data?.message || err.message || 'Impossible de joindre Google OAuth.',
-          type: 'error'
-        });
-      }
-    } finally {
       setLoadingGoogle(false);
+      setShowGoogleModal(true);
+      showToast({ title: 'Connexion Google impossible', message: apiErrorMessage(err, err?.message), type: 'danger' });
     }
   };
 
   const handleDisconnectGoogle = async () => {
-    if (!window.confirm('Voulez-vous révoquer l’accès Google Workspace (Gmail et Calendar) pour ce médecin ?')) return;
+    if (!window.confirm('Voulez-vous déconnecter la boîte Gmail ? Les e-mails ne seront plus lus ni répondus automatiquement.')) return;
     try {
       await apiDisconnectGoogle();
-    } catch {
-      // continue
+      showToast({ title: 'Google déconnecté', message: 'La lecture et l’envoi des e-mails sont suspendus.', type: 'info' });
+    } catch (err: any) {
+      showToast({ title: 'Déconnexion impossible', message: apiErrorMessage(err), type: 'danger' });
     }
-    setGoogleStatus(prev => ({ ...prev, connected: false }));
-    showToast({
-      title: 'Google déconnecté',
-      message: 'Les autorisations Google Workspace ont été révoquées.',
-      type: 'info'
-    });
+    await loadGoogleIntegrationStatus();
   };
 
   const handleDisconnectWhatsApp = async () => {
-    if (!window.confirm('Voulez-vous déconnecter WhatsApp Business ? Les rappels automatiques seront suspendus.')) return;
+    if (!window.confirm('Voulez-vous déconnecter WhatsApp Business ?')) return;
     try {
       await apiDisconnectWhatsApp();
-    } catch {
-      // ignore
+    } catch (err: any) {
+      showToast({ title: 'Déconnexion impossible', message: apiErrorMessage(err), type: 'danger' });
     }
-    setWhatsAppStatus({ connected: false });
-    showToast({
-      title: 'WhatsApp déconnecté',
-      message: 'Le canal WhatsApp Business a été déconnecté.',
-      type: 'info'
-    });
+    await loadWhatsAppConfig();
   };
 
+  // Lecture immédiate de la boîte Gmail (au lieu d'attendre le cycle de 30 s)
   const handleManualSync = async () => {
     setIsSyncing(true);
     setTestEmailResult(null);
-    const docEmail = doctorIndividualEmail || localStorage.getItem('medilaw_saved_doctor_email') || 'rayen.9b7@gmail.com';
     try {
-      const res = await apiSyncGoogleCalendar();
-      const nowStr = new Date().toLocaleTimeString();
-      setGoogleStatus(prev => ({
-        ...prev,
-        connected: true,
-        email: docEmail,
-        lastSyncAt: `À l’instant (${nowStr})`
-      }));
-      setSyncReport(res || {
-        doctorEmail: docEmail,
-        stats: {
-          totalAppointments: 6,
-          syncedEvents: 6,
-          conflictsResolved: 0,
-          antiLoopProtection: 'VERIFIED_ACTIVE',
-          lunchBreakProtected: '12:30 - 14:00 (Pause déjeuner respectée)',
-          freeBusyWindow: '08:30 - 17:30',
-          latencyMs: 120
-        }
-      });
+      const { data } = await apiClient.post('/api/integrations/google/poll-now');
+      setSyncReport(data);
       setShowSyncReportModal(true);
-      showToast({
-        title: 'Synchronisation hybride exécutée !',
-        message: `Google Calendar et boîte Gmail (${docEmail}) synchronisés sans conflit.`,
-        type: 'success'
-      });
-    } catch {
-      const nowStr = new Date().toLocaleTimeString();
-      setGoogleStatus(prev => ({
-        ...prev,
-        connected: true,
-        email: docEmail,
-        lastSyncAt: `À l’instant (${nowStr})`
-      }));
-      setSyncReport({
-        doctorEmail: docEmail,
-        stats: {
-          totalAppointments: 6,
-          syncedEvents: 6,
-          conflictsResolved: 0,
-          antiLoopProtection: 'VERIFIED_ACTIVE',
-          lunchBreakProtected: '12:30 - 14:00 (Pause déjeuner respectée)',
-          freeBusyWindow: '08:30 - 17:30',
-          latencyMs: 110
-        }
-      });
-      setShowSyncReportModal(true);
-      showToast({
-        title: 'Synchronisation exécutée',
-        message: `Créneaux FreeBusy et agenda interne synchronisés pour ${docEmail}.`,
-        type: 'success'
-      });
+      await loadGoogleIntegrationStatus();
+      useAppStore.getState().loadAllData();
+    } catch (err: any) {
+      showToast({ title: 'Lecture impossible', message: apiErrorMessage(err), type: 'danger' });
     } finally {
       setIsSyncing(false);
     }
   };
 
+  // Test du moteur IA sur un e-mail fictif (aucun envoi au patient)
   const handleTestIncomingEmail = async () => {
     setTestingIncomingEmail(true);
-    const docEmail = doctorIndividualEmail || localStorage.getItem('medilaw_saved_doctor_email') || 'rayen.9b7@gmail.com';
     try {
-      const res = await apiTestIncomingEmail({
-        senderName: 'Sami Chaabane',
-        senderEmail: 'sami.chaabane@gmail.com',
-        subject: 'Demande de RDV cardiologie vendredi 10h',
-        body: `Bonjour Dr. Rayen, je ressens de légères douleurs thoraciques et souhaiterais prendre un créneau ce vendredi à 10h si disponible. Merci, Sami.`
+      const { data } = await apiClient.post('/api/emails/ingest', {
+        senderName: 'Patient Test',
+        senderEmail: 'test.moteur@exemple.tn',
+        subject: '[TEST] Demande de rendez-vous',
+        body: '[TEST] Bonjour, je souhaite un rendez-vous demain à 10h00 pour une consultation.',
+        autoSend: false
       });
-      setTestEmailResult(res);
-      showToast({
-        title: 'E-mail test reçu et routé !',
-        message: `Message patient associé à ${docEmail}. Brouillon IA généré et créneau vérifié.`,
-        type: 'success'
-      });
-    } catch {
-      setTestEmailResult({
-        success: true,
-        message: `E-mail de test reçu et routé avec succès vers ${docEmail}.`,
-        routingDetails: {
-          routedToDoctor: 'Dr. Rayen B.',
-          doctorEmail: docEmail,
-          detectedIntent: 'APPOINTMENT (Prise de rendez-vous)',
-          aiDraftReply: `Bonjour M. Chaabane, le Dr. Rayen vous confirme la disponibilité du créneau de ce vendredi à 10h00. Votre rendez-vous a été enregistré dans le calendrier et synchronisé avec Google Calendar.`
-        }
-      });
-      showToast({
-        title: 'E-mail test routé avec succès !',
-        message: `Routage intelligent vers ${docEmail} validé.`,
-        type: 'success'
-      });
+      setTestEmailResult(data);
+      useAppStore.getState().loadEmails();
+    } catch (err: any) {
+      showToast({ title: 'Test impossible', message: apiErrorMessage(err), type: 'danger' });
     } finally {
       setTestingIncomingEmail(false);
     }
@@ -617,60 +465,51 @@ export const EnterpriseSettingsView: React.FC = () => {
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-[#2563EB] border border-blue-200">
-              {aiAutonomyLevel === 'SUPERVISED' ? 'Mode Supervisé' : 'Mode Autonome'}
+              {replyMode === 'hitl' ? 'Mode supervisé' : 'Mode automatique'}
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div 
-              onClick={() => setAiAutonomyLevel('SUPERVISED')}
+            <div
+              onClick={() => saveReplyMode('hitl')}
               className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                aiAutonomyLevel === 'SUPERVISED' 
-                  ? 'border-[#2563EB] bg-blue-50/50 shadow-xs' 
+                replyMode === 'hitl'
+                  ? 'border-[#2563EB] bg-blue-50/50 shadow-xs'
                   : 'border-[#E5EAF2] hover:border-slate-300'
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold text-xs text-[#14213D]">Supervision Praticien (Recommandé)</span>
-                {aiAutonomyLevel === 'SUPERVISED' && <CheckCircle2 className="w-4 h-4 text-[#2563EB]" />}
+                <span className="font-bold text-xs text-[#14213D]">Supervision du secrétariat</span>
+                {replyMode === 'hitl' && <CheckCircle2 className="w-4 h-4 text-[#2563EB]" />}
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                L'IA génère les brouillons de réponse et propose des créneaux. Rien n'est envoyé sans votre validation explicite.
+                L’IA prépare chaque réponse (confirmation, créneaux, demande de précision) et réserve les créneaux, mais rien n’est envoyé au patient sans votre validation.
               </p>
             </div>
 
-            <div 
-              onClick={() => setAiAutonomyLevel('AUTONOMOUS')}
+            <div
+              onClick={() => saveReplyMode('auto')}
               className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                aiAutonomyLevel === 'AUTONOMOUS' 
-                  ? 'border-[#2563EB] bg-blue-50/50 shadow-xs' 
+                replyMode === 'auto'
+                  ? 'border-[#2563EB] bg-blue-50/50 shadow-xs'
                   : 'border-[#E5EAF2] hover:border-slate-300'
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold text-xs text-[#14213D]">Autonomie Complète (IA 24h/24)</span>
-                {aiAutonomyLevel === 'AUTONOMOUS' && <CheckCircle2 className="w-4 h-4 text-[#2563EB]" />}
+                <span className="font-bold text-xs text-[#14213D]">Réponses automatiques 24h/24 (recommandé)</span>
+                {replyMode === 'auto' && <CheckCircle2 className="w-4 h-4 text-[#2563EB]" />}
               </div>
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                Les e-mails de prise de rendez-vous avec un score de confiance &gt; {confidenceThreshold}% reçoivent une confirmation automatique immédiate.
+                E-mail clair (praticien, date, heure) et créneau libre : RDV réservé et confirmé immédiatement. Sinon, l’IA demande la précision manquante. Les autres messages restent à valider.
               </p>
             </div>
           </div>
 
-          <div className="pt-2">
-            <div className="flex justify-between text-xs mb-2">
-              <span className="font-semibold text-slate-700">Seuil de Confiance NLP Minimal :</span>
-              <span className="font-bold text-[#2563EB]">{confidenceThreshold}%</span>
-            </div>
-            <input 
-              type="range" 
-              min="70" 
-              max="99" 
-              value={confidenceThreshold}
-              onChange={e => setConfidenceThreshold(Number(e.target.value))}
-              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#2563EB]"
-            />
-          </div>
+          {replyModeLocked && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              Le serveur impose le mode supervisé (AUTO_REPLY_MODE=hitl).
+            </p>
+          )}
         </div>
       )}
 
@@ -717,8 +556,8 @@ export const EnterpriseSettingsView: React.FC = () => {
                     <Mail className="w-5 h-5" />
                   </div>
                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    googleStatus.connected 
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    googleStatus.connected
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       : 'bg-amber-50 text-amber-700 border border-amber-200'
                   }`}>
                     {googleStatus.connected ? '● Connecté' : 'À connecter'}
@@ -733,10 +572,10 @@ export const EnterpriseSettingsView: React.FC = () => {
                 {googleStatus.connected ? (
                   <div className="space-y-1.5">
                     <div className="p-2.5 rounded-xl bg-[#F7F9FC] border border-[#E5EAF2] text-[11px] font-mono text-slate-700 truncate">
-                      {doctorIndividualEmail || googleStatus.email || localStorage.getItem('medilaw_saved_doctor_email') || 'rayen.9b7@gmail.com'}
+                      {googleStatus.email}
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Routage strict par boîte réceptrice : chaque praticien dispose de son propre e-mail dédié.
+                      Boîte centrale : l’IA lit chaque e-mail, identifie le praticien et répond dans le même fil (dernière lecture : {googleStatus.lastSyncAt}).
                     </p>
                   </div>
                 ) : (
@@ -784,8 +623,8 @@ export const EnterpriseSettingsView: React.FC = () => {
                     <Calendar className="w-5 h-5" />
                   </div>
                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    googleStatus.connected 
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    googleStatus.connected
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       : 'bg-amber-50 text-amber-700 border border-amber-200'
                   }`}>
                     {googleStatus.connected ? '● Connecté' : 'À connecter'}
@@ -823,7 +662,7 @@ export const EnterpriseSettingsView: React.FC = () => {
                       className="flex-1 py-2 bg-[#F7F9FC] hover:bg-slate-100 border border-[#E5EAF2] text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 text-[#2563EB] ${isSyncing ? 'animate-spin' : ''}`} />
-                      <span>{isSyncing ? 'Synchronisation...' : 'Synchroniser'}</span>
+                      <span>{isSyncing ? 'Lecture…' : 'Lire la boîte maintenant'}</span>
                     </button>
                     <button
                       onClick={() => setShowGoogleModal(true)}
@@ -853,8 +692,8 @@ export const EnterpriseSettingsView: React.FC = () => {
                     <MessageCircle className="w-5 h-5" />
                   </div>
                   <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    whatsAppStatus.connected 
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    whatsAppStatus.connected
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                       : 'bg-amber-50 text-amber-700 border border-amber-200'
                   }`}>
                     {whatsAppStatus.connected ? '● Connecté' : 'À connecter'}
@@ -985,29 +824,26 @@ export const EnterpriseSettingsView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[#14213D] flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-[#2563EB]" />
-                    Votre Compte Praticien
+                    Boîte de réception des patients
                   </span>
                   <span className="text-[10px] text-blue-700 font-bold bg-blue-100 px-2.5 py-0.5 rounded-full">
-                    Dr. Rayen B. (Cardiologie)
+                    Boîte centrale du cabinet
                   </span>
                 </div>
 
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Votre E-mail Gmail Professionnel Dédié
+                    Adresse Gmail qui reçoit les demandes de rendez-vous
                   </label>
                   <input
                     type="email"
                     value={doctorIndividualEmail}
-                    onChange={e => {
-                      setDoctorIndividualEmail(e.target.value);
-                      localStorage.setItem('medilaw_saved_doctor_email', e.target.value);
-                    }}
-                    placeholder="rayen.9b7@gmail.com"
+                    onChange={e => setDoctorIndividualEmail(e.target.value)}
+                    placeholder="rdv@votre-cabinet.tn"
                     className="w-full px-3 py-2 bg-white border border-[#E5EAF2] rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                   <p className="text-[10px] text-slate-500 mt-1.5">
-                    En tant que praticien, vous configurez exclusivement votre propre boîte Gmail et votre calendrier Google Calendar personnel.
+                    Les patients écrivent à cette adresse sans créer de compte. Après « Autoriser avec Google », connectez-vous avec CE compte Gmail.
                   </p>
                 </div>
               </div>
@@ -1044,7 +880,7 @@ export const EnterpriseSettingsView: React.FC = () => {
                         type="text"
                         value={googleClientId}
                         onChange={e => setGoogleClientId(e.target.value)}
-                        placeholder="531458977181-xxxxxxxx.apps.googleusercontent.com"
+                        placeholder="xxxxxxxx.apps.googleusercontent.com"
                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-mono"
                       />
                     </div>
@@ -1347,117 +1183,72 @@ export const EnterpriseSettingsView: React.FC = () => {
       {/* ======================================================== */}
       {/* MODAL 3 : RAPPORT & TEST DE SYNCHRONISATION EN DIRECT    */}
       {/* ======================================================== */}
-      {showSyncReportModal && (
+      {showSyncReportModal && syncReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs font-sans animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#E8EDF4] space-y-5 max-h-[90vh] overflow-y-auto">
-            {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#E8EDF4]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-[#14213D] flex items-center gap-2">
-                    Synchronisation Opérationnelle
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Compte : <strong className="font-mono text-slate-800">{doctorIndividualEmail || localStorage.getItem('medilaw_saved_doctor_email') || 'rayen.9b7@gmail.com'}</strong>
-                  </p>
-                </div>
+              <div>
+                <h3 className="text-base font-black text-[#14213D]">Lecture de la boîte Gmail</h3>
+                <p className="text-xs text-slate-500">
+                  Boîte : <strong className="font-mono text-slate-800">{syncReport.polling?.mailbox || googleStatus.email || '—'}</strong>
+                </p>
               </div>
-              <button
-                onClick={() => setShowSyncReportModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-              >
+              <button onClick={() => setShowSyncReportModal(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Statistiques réelles de synchronisation */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 bg-[#F7F9FC] border border-[#E8EDF4] rounded-2xl space-y-1">
-                <span className="text-[11px] text-slate-500 font-semibold">Google Calendar API</span>
-                <div className="font-bold text-emerald-700 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  FreeBusy Actif
-                </div>
-                <div className="text-[10px] text-slate-400">Créneaux alignés sans conflit</div>
+            {syncReport.connected === false || syncReport.error ? (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+                {syncReport.error || 'La boîte Gmail n’est pas connectée. Autorisez l’accès avec Google pour activer la lecture et les réponses automatiques.'}
               </div>
-
-              <div className="p-3 bg-[#F7F9FC] border border-[#E8EDF4] rounded-2xl space-y-1">
-                <span className="text-[11px] text-slate-500 font-semibold">Gmail API</span>
-                <div className="font-bold text-emerald-700 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Boîte Dédiée
-                </div>
-                <div className="text-[10px] text-slate-400">Routage strict par praticien</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                {[
+                  ['Nouveaux e-mails', syncReport.fetched],
+                  ['Traités par l’IA', syncReport.processed],
+                  ['Réponses envoyées', syncReport.replied],
+                  ['Ignorés (robots, newsletters)', syncReport.skipped],
+                ].map(([label, val]) => (
+                  <div key={String(label)} className="p-3 bg-[#F7F9FC] border border-[#E8EDF4] rounded-2xl">
+                    <span className="text-[11px] text-slate-500 font-semibold">{label}</span>
+                    <div className="text-lg font-black text-[#14213D]">{val ?? 0}</div>
+                  </div>
+                ))}
               </div>
+            )}
+            <p className="text-[11px] text-slate-500">
+              Lecture automatique toutes les {syncReport.polling?.intervalSeconds || 30} s • Dernière lecture : {formatSync(syncReport.polling?.lastPollAt)}
+            </p>
 
-              <div className="p-3 bg-[#F7F9FC] border border-[#E8EDF4] rounded-2xl space-y-1">
-                <span className="text-[11px] text-slate-500 font-semibold">Anti-boucle récursive</span>
-                <div className="font-bold text-[#14213D]">100% Intègre</div>
-                <div className="text-[10px] text-slate-400">Marquage unique des IDs</div>
-              </div>
-
-              <div className="p-3 bg-[#F7F9FC] border border-[#E8EDF4] rounded-2xl space-y-1">
-                <span className="text-[11px] text-slate-500 font-semibold">Pause déjeuner</span>
-                <div className="font-bold text-[#14213D]">12:30 - 14:00</div>
-                <div className="text-[10px] text-emerald-600 font-semibold">Créneaux protégés</div>
-              </div>
-            </div>
-
-            {/* Section Test d'envoi et de routage interactif */}
             <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-[#14213D] flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-[#2563EB]" />
-                  Tester le Moteur IA & Routage Réel
-                </span>
-                <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-                  Test Interactif
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-600 leading-relaxed">
-                Simulez l'arrivée d'un e-mail d'un patient sollicitant une consultation pour observer l'analyse d'intention et la vérification de vos créneaux.
-              </p>
-
+              <span className="font-bold text-[#14213D] flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-[#2563EB]" /> Tester le moteur IA
+              </span>
+              <p className="text-[11px] text-slate-600">Analyse un e-mail de test « RDV demain à 10h » (aucun e-mail n’est envoyé).</p>
               <button
                 type="button"
                 onClick={handleTestIncomingEmail}
                 disabled={testingIncomingEmail}
-                className="w-full py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 bg-[#2563EB] hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1.5"
               >
                 <Mail className="w-3.5 h-3.5" />
-                <span>{testingIncomingEmail ? 'Analyse IA en cours...' : 'Simuler un e-mail entrant pour Dr. Rayen'}</span>
+                <span>{testingIncomingEmail ? 'Analyse en cours…' : 'Lancer le test'}</span>
               </button>
-
-              {/* Résultat du test */}
               {testEmailResult && (
-                <div className="p-3 bg-white rounded-xl border border-blue-100 space-y-2 text-[11px] animate-in fade-in">
+                <div className="p-3 bg-white rounded-xl border border-blue-100 space-y-2 text-[11px]">
                   <div className="flex items-center justify-between font-bold text-[#14213D]">
-                    <span className="text-emerald-700">✓ E-mail reçu et analysé</span>
-                    <span className="text-[10px] text-blue-600 font-mono">Intent: APPOINTMENT (96%)</span>
+                    <span>Décision : {testEmailResult.decision}</span>
+                    <span className="text-[10px] text-blue-600 font-mono">{testEmailResult.intent}</span>
                   </div>
-                  <div className="text-slate-600 text-[10px] p-2 bg-slate-50 rounded-lg font-mono">
-                    <strong>De :</strong> Sami Chaabane &lt;sami.chaabane@gmail.com&gt;<br />
-                    <strong>Vers :</strong> {doctorIndividualEmail || 'rayen.9b7@gmail.com'}<br />
-                    <strong>Objet :</strong> Demande de RDV cardiologie vendredi 10h
-                  </div>
-                  <div className="p-2 bg-emerald-50 rounded-lg text-emerald-800 text-[10px] leading-relaxed">
-                    <strong>Réponse automatique IA générée :</strong><br />
-                    « Bonjour M. Chaabane, le Dr. Rayen vous confirme la disponibilité du créneau de ce vendredi à 10h00. Votre rendez-vous a été enregistré et synchronisé avec Google Calendar. »
-                  </div>
+                  <div className="text-slate-600">Praticien : {testEmailResult.practitioner?.name || 'à préciser par le patient'}</div>
+                  <pre className="p-2 bg-slate-50 rounded-lg whitespace-pre-wrap font-sans text-slate-700">{testEmailResult.draftReply}</pre>
                 </div>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8EDF4]">
-              <button
-                onClick={() => setShowSyncReportModal(false)}
-                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors"
-              >
+            <div className="flex items-center justify-end pt-2 border-t border-[#E8EDF4]">
+              <button onClick={() => setShowSyncReportModal(false)} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors">
                 Fermer
               </button>
             </div>

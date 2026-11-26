@@ -2,17 +2,18 @@ import React, { useState } from 'react';
 import { SuperAdminSidebar } from './SuperAdminSidebar';
 import type { SuperAdminTabId } from './SuperAdminSidebar';
 import { SuperAdminTopNav } from './SuperAdminTopNav';
-import { AdminDashboardTab } from './tabs/AdminDashboardTab';
-import { AdminCabinetsTab } from './tabs/AdminCabinetsTab';
-import { AdminDoctorsTab } from './tabs/AdminDoctorsTab';
-import { AdminUsersTab } from './tabs/AdminUsersTab';
-import { AdminSubscriptionsTab } from './tabs/AdminSubscriptionsTab';
-import { AdminPaymentsTab } from './tabs/AdminPaymentsTab';
-import { AdminAiSupervisionTab } from './tabs/AdminAiSupervisionTab';
-import { AdminAutomationsTab } from './tabs/AdminAutomationsTab';
-import { AdminMonitoringTab } from './tabs/AdminMonitoringTab';
-import { AdminSecurityTab } from './tabs/AdminSecurityTab';
-import { AdminSettingsTab } from './tabs/AdminSettingsTab';
+import {
+  RealAdminOverview,
+  RealAdminClinics,
+  RealAdminDoctors,
+  RealAdminUsers,
+  RealAdminAiSupervision,
+  RealAdminMonitoring,
+  RealAdminSecurity,
+  RealAdminAutomations,
+  RealAdminBilling,
+  RealAdminSettings,
+} from './RealAdminTabs';
 
 interface SuperAdminLayoutProps {
   onExitSuperAdmin?: () => void;
@@ -47,17 +48,17 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({ onExitSuperA
         {/* Scrollable Main Content Area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            {currentTab === 'dashboard' && <AdminDashboardTab onNavigateToTab={setCurrentTab} />}
-            {currentTab === 'cabinets' && <AdminCabinetsTab />}
-            {currentTab === 'doctors' && <AdminDoctorsTab />}
-            {currentTab === 'users' && <AdminUsersTab />}
-            {currentTab === 'subscriptions' && <AdminSubscriptionsTab />}
-            {currentTab === 'payments' && <AdminPaymentsTab />}
-            {currentTab === 'ai-supervision' && <AdminAiSupervisionTab />}
-            {currentTab === 'automations' && <AdminAutomationsTab />}
-            {currentTab === 'monitoring' && <AdminMonitoringTab />}
-            {currentTab === 'security' && <AdminSecurityTab />}
-            {currentTab === 'settings' && <AdminSettingsTab />}
+            {currentTab === 'dashboard' && <RealAdminOverview onNavigateToTab={setCurrentTab} />}
+            {currentTab === 'cabinets' && <RealAdminClinics />}
+            {currentTab === 'doctors' && <RealAdminDoctors />}
+            {currentTab === 'users' && <RealAdminUsers />}
+            {currentTab === 'subscriptions' && <RealAdminBilling kind="subscriptions" />}
+            {currentTab === 'payments' && <RealAdminBilling kind="payments" />}
+            {currentTab === 'ai-supervision' && <RealAdminAiSupervision />}
+            {currentTab === 'automations' && <RealAdminAutomations />}
+            {currentTab === 'monitoring' && <RealAdminMonitoring />}
+            {currentTab === 'security' && <RealAdminSecurity />}
+            {currentTab === 'settings' && <RealAdminSettings />}
           </div>
         </main>
       </div>

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { apiFetchPublicDoctors, apiErrorMessage } from '../../../services/apiClient';
 import { 
   Search, 
   Stethoscope, 
@@ -23,47 +24,39 @@ export const PatientFindDoctorTab: React.FC<PatientFindDoctorTabProps> = ({
   const [specialtyFilter, setSpecialtyFilter] = useState<string>('ALL');
   const [selectedDoctorProfile, setSelectedDoctorProfile] = useState<any>(null);
 
-  const doctors = [
-    {
-      id: 'doc-1',
-      name: 'Dr. Youssef Ben Salem',
-      specialty: 'Cardiologie & Rythmologie',
-      clinic: 'Cabinet Médical Dr. Ben Salem',
-      address: 'Avenue Habib Bourguiba, Tunis',
-      phone: '+216 71 234 567',
-      price: 70,
-      cnam: true,
-      nextSlot: 'Demain à 10:00',
-      hours: 'Lun - Ven : 08h30 - 17h30 | Sam : 08h30 - 13h00',
-      bio: 'Ancien interne des hôpitaux universitaires de Tunis, spécialisé dans les explorations électrocardiographiques et la prise en charge de l’hypertension artérielle.'
-    },
-    {
-      id: 'doc-2',
-      name: 'Dr. Amira Khemir',
-      specialty: 'Cardiologie Pédiatrique',
-      clinic: 'Cabinet Médical Dr. Ben Salem',
-      address: 'Avenue Habib Bourguiba, Tunis',
-      phone: '+216 71 234 568',
-      price: 70,
-      cnam: true,
-      nextSlot: 'Jeudi à 14:30',
-      hours: 'Mar, Jeu, Ven : 09h00 - 16h00',
-      bio: 'Spécialiste du suivi cardiaque des enfants et nourrissons, dépistage des malformations congénitales et échographie doppler cardiaque.'
-    },
-    {
-      id: 'doc-3',
-      name: 'Dr. Mehdi Chaouch',
-      specialty: 'Chirurgie Dentaire & Implantologie',
-      clinic: 'Clinique Dentaire Les Berges du Lac',
-      address: 'Les Berges du Lac 2, Tunis',
-      phone: '+216 70 111 222',
-      price: 60,
-      cnam: true,
-      nextSlot: 'Vendredi à 11:00',
-      hours: 'Lun - Sam : 09h00 - 18h00',
-      bio: 'Chirurgien dentiste diplômé de la Faculté de Médecine Dentaire de Monastir, soins conservateurs et réhabilitation esthétique du sourire.'
-    }
-  ];
+  // Praticiens réels ouverts à la réservation en ligne
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetchPublicDoctors()
+      .then((list: any[]) => {
+        setDoctors((Array.isArray(list) ? list : [])
+          .filter((d) => d.bookingSettings?.onlineBookingEnabled !== false)
+          .map((d) => {
+            const clinic = d.tenantId || {};
+            return {
+              id: d._id,
+              _id: d._id,
+              name: d.name,
+              specialty: d.specialty || '',
+              clinic: clinic.name || '',
+              address: [clinic.address?.street, clinic.address?.city].filter(Boolean).join(', '),
+              phone: clinic.phone || '',
+              price: null,
+              cnam: false,
+              nextSlot: '',
+              hours: '',
+              bio: '',
+              appointmentDuration: d.appointmentDuration || 30,
+            };
+          }));
+        setLoadError(null);
+      })
+      .catch((err: any) => setLoadError(apiErrorMessage(err)))
+      .finally(() => setLoadingDoctors(false));
+  }, []);
 
   const filtered = doctors.filter(doc => {
     if (specialtyFilter !== 'ALL' && !doc.specialty.toLowerCase().includes(specialtyFilter.toLowerCase())) return false;
@@ -80,7 +73,7 @@ export const PatientFindDoctorTab: React.FC<PatientFindDoctorTabProps> = ({
         <div>
           <h1 className="text-xl font-black text-[#14213D] tracking-tight">Trouver un Médecin Spécialiste</h1>
           <p className="text-xs text-slate-500">
-            Prenez rendez-vous en ligne 24h/24 auprès de praticiens conventionnés CNAM
+            Prenez rendez-vous en ligne 24h/24, sans créer de compte
           </p>
         </div>
       </div>
@@ -101,8 +94,8 @@ export const PatientFindDoctorTab: React.FC<PatientFindDoctorTabProps> = ({
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
           {[
             { id: 'ALL', label: 'Toutes les spécialités' },
-            { id: 'Cardio', label: 'Cardiologie' },
-            { id: 'Dentaire', label: 'Dentaire' }
+            // Spécialités réellement proposées par les praticiens inscrits
+            ...[...new Set(doctors.map(d => (d.specialty || '').split(/[&,]/)[0].trim()).filter(Boolean))].map(sp => ({ id: sp, label: sp }))
           ].map(f => (
             <button
               key={f.id}
@@ -121,6 +114,11 @@ export const PatientFindDoctorTab: React.FC<PatientFindDoctorTabProps> = ({
 
       {/* Doctors Cards List */}
       <div className="space-y-4">
+        {loadingDoctors && <div className="p-6 text-center text-xs text-slate-400">Chargement des praticiens…</div>}
+        {loadError && <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">{loadError}</div>}
+        {!loadingDoctors && !loadError && filtered.length === 0 && (
+          <div className="p-6 text-center text-xs text-slate-400">Aucun praticien ne correspond à votre recherche.</div>
+        )}
         {filtered.map(doc => (
           <div
             key={doc.id}
@@ -149,7 +147,7 @@ export const PatientFindDoctorTab: React.FC<PatientFindDoctorTabProps> = ({
                 </div>
 
                 <div className="text-[11px] text-slate-400 font-medium pt-1">
-                  Tarif indicatif : <strong>{doc.price} DT</strong> • Prochain créneau : <strong className="text-emerald-600">{doc.nextSlot}</strong>
+                  Consultation de {doc.appointmentDuration} min{doc.phone ? ` • ${doc.phone}` : ''}
                 </div>
               </div>
             </div>
@@ -196,17 +194,15 @@ export const PatientFindDoctorTab: React.FC<PatientFindDoctorTabProps> = ({
             </div>
 
             <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4] space-y-2 text-xs text-slate-700">
-              <div className="font-bold text-slate-900">Présentation & Parcours :</div>
-              <p className="leading-relaxed text-slate-600">{selectedDoctorProfile.bio}</p>
+              <div className="font-bold text-slate-900">{selectedDoctorProfile.clinic}</div>
+              {selectedDoctorProfile.address && <p className="leading-relaxed text-slate-600">{selectedDoctorProfile.address}</p>}
               <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500">
-                <strong>Horaires :</strong> {selectedDoctorProfile.hours}
+                Consultation de {selectedDoctorProfile.appointmentDuration} min{selectedDoctorProfile.phone ? ` • Tél. ${selectedDoctorProfile.phone}` : ''}
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <div className="text-xs font-bold text-slate-900">
-                Tarif : <span className="text-[#2563EB]">{selectedDoctorProfile.price} DT</span>
-              </div>
+              <div className="text-xs font-bold text-slate-900">{selectedDoctorProfile.specialty}</div>
               <button
                 onClick={() => {
                   const doc = selectedDoctorProfile;

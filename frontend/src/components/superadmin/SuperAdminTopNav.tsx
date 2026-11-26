@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Bell, 
@@ -14,6 +14,7 @@ import {
   Server
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
+import { SERVER_LABEL, apiClient } from '../../services/apiClient';
 
 interface SuperAdminTopNavProps {
   onToggleMobileMenu: () => void;
@@ -30,11 +31,19 @@ export const SuperAdminTopNav: React.FC<SuperAdminTopNavProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false);
 
-  const notifications = [
-    { id: 1, type: 'URGENT', title: 'Tentative de brute-force bloquée', time: 'Il y a 4 min', desc: 'IP 197.14.52.12 bloquée après 5 tentatives échouées.' },
-    { id: 2, type: 'SUCCESS', title: 'Nouveau cabinet inscrit', time: 'Il y a 18 min', desc: 'Clinique Dentaire Les Berges du Lac a activé l’offre Enterprise.' },
-    { id: 3, type: 'INFO', title: 'Backup automatique MongoDB réussi', time: 'Il y a 1h', desc: 'Snapshot chiffré stocké sur AWS S3 avec succès.' }
-  ];
+  // Dernières actions réelles du journal d'audit
+  const [notifications, setNotifications] = useState<{ id: string; type: string; title: string; time: string; desc: string }[]>([]);
+  useEffect(() => {
+    apiClient.get('/api/admin/audit-logs?limit=8').then(({ data }) => {
+      setNotifications((Array.isArray(data) ? data : []).map((l: any) => ({
+        id: l.id,
+        type: /EMERGENCY|FAILED|REVOKED/.test(l.action) ? 'URGENT' : /CREATED|APPROVE|VALIDATION/.test(l.action) ? 'SUCCESS' : 'INFO',
+        title: l.action.replace(/_/g, ' ').toLowerCase().replace(/^./, (c: string) => c.toUpperCase()),
+        time: l.createdAt ? new Date(l.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '',
+        desc: `${l.resource || ''}${l.user ? ' • par ' + l.user : ''}`,
+      })));
+    }).catch(() => setNotifications([]));
+  }, [showNotifications]);
 
   return (
     <header className="h-18 bg-white border-b border-[#E8EDF4] px-6 flex items-center justify-between shrink-0 z-30 font-sans">
@@ -61,9 +70,8 @@ export const SuperAdminTopNav: React.FC<SuperAdminTopNavProps> = ({
       <div className="flex items-center gap-3">
         {/* Backend Endpoint & Cluster SLA Pill */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#F7F9FC] border border-[#E8EDF4] text-[11px] font-semibold text-slate-700">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="font-mono text-emerald-600 font-bold">localhost:5000 (Local)</span>
-          <span className="text-slate-400">• SLA 99.98%</span>
+<span className={`w-2 h-2 rounded-full ${isBackendConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+          <span className={`font-mono font-bold ${isBackendConnected ? 'text-emerald-600' : 'text-rose-600'}`}>{isBackendConnected ? SERVER_LABEL : 'Serveur injoignable'}</span>
         </div>
 
         {/* Quick Action: New Tenant */}
@@ -84,9 +92,9 @@ export const SuperAdminTopNav: React.FC<SuperAdminTopNavProps> = ({
             className="p-2 rounded-xl bg-[#F7F9FC] border border-[#E8EDF4] text-slate-600 hover:text-[#2563EB] hover:bg-slate-100 transition-all relative"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-              3
-            </span>
+            {notifications.some(n => n.type === 'URGENT') && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full" />
+            )}
           </button>
 
           {showNotifications && (
@@ -96,10 +104,11 @@ export const SuperAdminTopNav: React.FC<SuperAdminTopNavProps> = ({
                   <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
                   <span className="text-xs font-bold text-[#14213D]">Alertes & Audit Système</span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-semibold">3 non lues</span>
+                <span className="text-[10px] text-slate-400 font-semibold">{notifications.length} récente(s)</span>
               </div>
 
               <div className="space-y-2 max-h-72 overflow-y-auto">
+                {notifications.length === 0 && <p className="text-[11px] text-slate-400 text-center py-4">Aucune activité récente.</p>}
                 {notifications.map(n => (
                   <div 
                     key={n.id} 

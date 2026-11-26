@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { apiClient, N8N_UI_URL } from '../services/apiClient';
+import { useAppStore } from '../stores/useAppStore';
 import {
   Workflow,
   Play,
@@ -85,174 +87,104 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
     }
   ];
 
+  // Diagnostic réel de la chaîne : aucune réussite n'est supposée, chaque étape est vérifiée
   const handleRunAllFlows = async () => {
     setSimulationLoading(true);
     setSimulationResult(null);
-
     const startTime = performance.now();
+    const check = async (step, workflow, fn) => {
+      try {
+        const { ok, result, action } = await fn();
+        return { step, workflow, status: ok ? 'OK' : 'À CONFIGURER', ok, result, action };
+      } catch (err) {
+        return { step, workflow, status: 'ERREUR', ok: false, result: err?.response?.data?.message || err?.message || 'Injoignable', action: 'Vérifiez que le service est démarré' };
+      }
+    };
+
+    const flowsReport = await Promise.all([
+      check(1, 'Backend API', async () => {
+        const { data } = await apiClient.get('/health');
+        return { ok: data?.status === 'UP', result: `Statut : ${data?.status}`, action: data?.environment || '' };
+      }),
+      check(2, 'Service IA (classification)', async () => {
+        const { data } = await apiClient.get('/api/ai/health');
+        const up = data && data.status !== 'DEGRADED';
+        return { ok: up, result: up ? 'Service IA opérationnel' : 'Service IA indisponible : analyse locale de secours', action: data?.error || '' };
+      }),
+      check(3, 'Boîte Gmail centrale (lecture + envoi)', async () => {
+        const { data } = await apiClient.get('/api/integrations/google/status');
+        return {
+          ok: Boolean(data?.connected),
+          result: data?.connected ? `Connectée : ${data.email}` : 'Non connectée : les réponses restent en brouillon',
+          action: data?.connected ? `Dernière lecture : ${data.polling?.lastPollAt ? new Date(data.polling.lastPollAt).toLocaleTimeString('fr-FR') : '—'}` : 'Paramètres > Intégrations > Autoriser avec Google',
+        };
+      }),
+      check(4, 'Moteur n8n', async () => {
+        await fetch(`${N8N_UI_URL}/healthz`, { mode: 'no-cors' });
+        return { ok: true, result: `Joignable sur ${N8N_UI_URL}`, action: 'Workflows : ingestion, rappels 24h, agenda, urgences, journal' };
+      }),
+    ]);
+
+    const successful = flowsReport.filter(r => r.ok).length;
+    setSimulationResult({
+      masterWorkflow: 'Diagnostic de la chaîne e-mail → IA → agenda',
+      status: successful === flowsReport.length ? 'OPERATIONNEL' : 'ACTION_REQUISE',
+      n8nWorkflowId: 'MasterRunAll0001',
+      totalWorkflows: flowsReport.length,
+      successfulWorkflows: successful,
+      executionTimeMs: Number((performance.now() - startTime).toFixed(1)),
+      timestamp: new Date().toISOString(),
+      flowsReport,
+      message: successful === flowsReport.length
+        ? '✅ Toute la chaîne est opérationnelle.'
+        : `⚠️ ${flowsReport.length - successful} élément(s) à configurer ou démarrer (voir ci-dessous).`,
+    });
+    setSimulationLoading(false);
+  };
+
+  // Test réel d'un flux : le moteur backend traite un e-mail de test (aucun envoi au patient)
+  const handleRunSimulation = async (type) => {
+    setSimulationLoading(true);
+    setSimulationResult(null);
+    const t0 = performance.now();
     try {
-      // 1. Appel Step 1 : Ingestion Email
-      const emailRes = await fetch('http://localhost:5000/api/emails/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender: { name: 'Sami Chaabane', email: 'sami.chaabane@gmail.com' },
-          subject: 'Demande de consultation cardiologie',
-          body: 'Bonjour Dr. Rayen, je ressens de légers essoufflements et souhaiterais un RDV de contrôle.',
-          clinicId: '66f1234567890abcdef12345'
-        })
-      }).then(r => r.json()).catch(err => ({ status: 'SIMULATED_OK' }));
-
-      // 2. Appel Step 2 : Rappels 24h
-      const reminderRes = await fetch('http://localhost:5000/api/appointments/reminders-due')
-        .then(r => r.json()).catch(err => ({ count: 2 }));
-
-      // 3. Appel Step 3 : Google Calendar Sync
-      const calendarRes = await fetch('http://localhost:5000/api/integrations/google/sync', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer demo_session_token_2026' }
-      }).then(r => r.json()).catch(err => ({ success: true }));
-
-      // 4. Appel Step 4 : Escalade Urgence
-      const emergencyRes = await fetch('http://localhost:5000/api/integrations/whatsapp/send-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'CRITICAL_EMERGENCY_SAMU_190',
-          recipient: '+216 98 111 222',
-          message: '🚨 MASTER FLOW TEST : Validation complète SAMU 190 et Astreinte Cabinet.'
-        })
-      }).then(r => r.json()).catch(err => ({ success: true }));
-
-      const totalTime = (performance.now() - startTime).toFixed(1);
-
-      const consolidated = {
-        masterWorkflow: '0. Orchestrateur Global - Exécuter Tous les Workflows (Run All Flows)',
-        status: 'SUCCESS_ALL_FLOWS_OPERATIONAL',
-        n8nWorkflowId: 'MasterRunAll0001',
-        totalWorkflows: 4,
-        successfulWorkflows: 4,
-        executionTimeMs: Number(totalTime),
-        timestamp: new Date().toISOString(),
-        flowsReport: [
-          {
-            step: 1,
-            workflow: '1. Ingestion et Tri E-mails (IA + n8n)',
-            status: '200 OK',
-            result: `E-mail reçu de Sami Chaabane analysé (Intent: ${emailRes?.intent || 'APPOINTMENT'}, Confiance: 96%)`,
-            action: 'Draft de réponse médicale généré & classé'
-          },
-          {
-            step: 2,
-            workflow: '2. Rappels Automatiques WhatsApp 24h',
-            status: '200 OK',
-            result: `${reminderRes?.count || 2} rappels de rendez-vous pour le lendemain préparés`,
-            action: 'Notification WhatsApp envoyée'
-          },
-          {
-            step: 3,
-            workflow: '3. Synchronisation Agenda Google Calendar',
-            status: '200 OK',
-            result: 'Synchronisation agenda Dr. Rayen B. (rayen.9b7@gmail.com) réussie',
-            action: '0 conflit, pause 12:30-14:00 préservée'
-          },
-          {
-            step: 4,
-            workflow: '4. Escalade Urgence Critique SAMU 190',
-            status: '200 OK',
-            result: 'Alerte WhatsApp transmise au praticien d’astreinte (+216 98 111 222)',
-            action: 'Protocole SAMU 190 activé'
-          }
-        ],
-        message: '🎉 SUCCÈS TOTAL : Les 4 workflows n8n ont été exécutés en séquence sans aucune erreur !'
-      };
-
-      setSimulationResult(consolidated);
-
-      if (onSimulateEmail) {
-        onSimulateEmail({
-          id: `sim-all-${Date.now()}`,
-          sender: { name: 'Sami Chaabane', email: 'sami.chaabane@gmail.com' },
-          subject: 'Demande de RDV consultation cardiologie (Master Flow)',
-          body: 'Test global validé : e-mail classé, agenda synchronisé, rappel préparé.',
-          intent: 'APPOINTMENT',
-          confidence: 0.98,
-          status: 'AUTO_PROCESSED',
-          draftReply: 'Bonjour M. Chaabane, votre créneau est pré-réservé et synchronisé sur l\'agenda du Dr. Rayen B.'
+      if (type === 'REMINDER') {
+        const d = new Date(); d.setDate(d.getDate() + 1);
+        const tomorrow = d.toISOString().split('T')[0];
+        const { data } = await apiClient.get(`/api/appointments?date=${tomorrow}`);
+        const due = (Array.isArray(data) ? data : []).filter(a => ['SCHEDULED', 'CONFIRMED'].includes(a.status) && !a.reminderSent24h);
+        setSimulationResult({
+          workflow: '2. Rappels e-mail 24h',
+          status: 'OK',
+          ok: true,
+          dueCount: due.length,
+          recipients: due.map(a => `${a.patient?.name} — ${a.timeSlot?.start}`),
+          note: 'n8n envoie ces rappels chaque jour à 08h00 (Gmail doit être connecté).',
+          executionTimeMs: Number((performance.now() - t0).toFixed(1)),
         });
+      } else {
+        const payload = type === 'EMERGENCY'
+          ? { senderName: 'Patient Test', senderEmail: 'test.urgence@exemple.tn', subject: '[TEST] Douleur thoracique', body: "[TEST] J'ai une douleur thoracique forte depuis ce matin.", autoSend: false }
+          : { senderName: 'Patient Test', senderEmail: 'test.rdv@exemple.tn', subject: '[TEST] Demande de rendez-vous', body: '[TEST] Bonjour, je souhaite un rendez-vous demain à 10h00.', autoSend: false };
+        const { data } = await apiClient.post('/api/emails/ingest', payload);
+        setSimulationResult({
+          workflow: type === 'EMERGENCY' ? '4. Escalade urgence vitale' : '1. Ingestion e-mail → IA → décision',
+          status: 'OK',
+          ok: true,
+          decision: data.decision,
+          intent: data.intent,
+          praticien: data.practitioner?.name || 'à préciser par le patient',
+          reponsePreparee: data.draftReply,
+          note: 'E-mail de test ajouté à la boîte (réponse non envoyée).',
+          executionTimeMs: Number((performance.now() - t0).toFixed(1)),
+        });
+        useAppStore.getState().loadEmails();
       }
     } catch (err) {
-      console.error('Master workflow error:', err);
+      setSimulationResult({ workflow: type, status: 'ERREUR', ok: false, erreur: err?.response?.data?.message || err?.message });
     } finally {
       setSimulationLoading(false);
     }
-  };
-
-  const handleRunSimulation = (type) => {
-    setSimulationLoading(true);
-    setSimulationResult(null);
-
-    setTimeout(() => {
-      setSimulationLoading(false);
-      if (type === 'EMERGENCY') {
-        const payload = {
-          workflow: '4. Escalade d’Urgence Critique SAMU 190',
-          status: 'SUCCESS',
-          intent: 'EMERGENCY',
-          confidence: 0.99,
-          patient: 'Mona Karray (+216 98 111 222)',
-          actionTaken: '🚨 Alerte SMS immédiate transmise au Dr. Rayen B. & Notification SAMU 190 générée.',
-          executionTimeMs: 42.5
-        };
-        setSimulationResult(payload);
-        if (onSimulateEmail) {
-          onSimulateEmail({
-            id: `sim-${Date.now()}`,
-            sender: { name: 'Mona Karray', email: 'm.karray@yahoo.fr' },
-            subject: 'URGENCE : Forte douleur thoracique simulée n8n',
-            body: 'Simulation n8n : douleur thoracique aiguë irradiant vers le bras gauche.',
-            intent: 'EMERGENCY',
-            confidence: 0.99,
-            status: 'ESCALATED_EMERGENCY',
-            draftReply: '🚨 ALERTE URGENCE VITALE : Veuillez contacter sans délai le SAMU Tunisie au 190 ou 198.'
-          });
-        }
-      } else if (type === 'REMINDER') {
-        setSimulationResult({
-          workflow: '2. Rappels Automatiques WhatsApp 24h',
-          status: 'SUCCESS',
-          dueCount: 2,
-          recipients: ['Sami Chaabane (+216 98 456 789)', 'Leila Trabelsi (+216 22 334 455)'],
-          template: '👋 Bonjour {{patient}}, rappel de votre consultation demain à {{heure}} au cabinet Dr. Rayen B.',
-          backendUpdated: true
-        });
-      } else {
-        const payload = {
-          workflow: '1. Ingestion E-mail n8n',
-          status: 'SUCCESS',
-          intent: 'APPOINTMENT',
-          confidence: 0.96,
-          sender: 'Yassine Dridi',
-          subject: 'Demande de RDV consultation cardiologie',
-          extractedEntities: { requestedDate: 'vendredi', requestedTime: '15h' },
-          actionTaken: 'E-mail classé avec succès et inséré dans la file de validation Human-in-the-Loop.',
-          executionTimeMs: 38.1
-        };
-        setSimulationResult(payload);
-        if (onSimulateEmail) {
-          onSimulateEmail({
-            id: `sim-${Date.now()}`,
-            sender: { name: 'Yassine Dridi', email: 'yassine.dridi@gmail.com' },
-            subject: 'Demande de RDV consultation cardiologie vendredi 15h',
-            body: 'Bonjour Docteur, je souhaiterais prendre un créneau ce vendredi après-midi.',
-            intent: 'APPOINTMENT',
-            confidence: 0.96,
-            status: 'PENDING_VALIDATION',
-            draftReply: 'Bonjour M. Dridi,\n\nNous avons bien reçu votre demande pour vendredi 15h00. Souhaitez-vous que nous confirmions ce créneau ?'
-          });
-        }
-      }
-    }, 500);
   };
 
   return (
@@ -276,7 +208,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
           </div>
 
           <a
-            href="http://localhost:5678"
+            href={N8N_UI_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all"
@@ -338,7 +270,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
             </button>
 
             <a
-              href="http://localhost:5678/workflow/MasterRunAll0001"
+              href={`${N8N_UI_URL}/workflow/MasterRunAll0001`}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-white/20 text-center"
@@ -393,7 +325,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
                   </div>
 
                   <a
-                    href={`http://localhost:5678/workflow/${wf.n8nId}`}
+                    href={`${N8N_UI_URL}/workflow/${wf.n8nId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -492,11 +424,11 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
           <div className="p-5 rounded-xl bg-[#F7F9FC] border border-indigo-200 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 pb-3">
               <span className="font-black text-slate-900 flex items-center gap-2 text-sm">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span>{simulationResult.masterWorkflow || `Exécution n8n Réussie : ${simulationResult.workflow}`}</span>
+                <CheckCircle2 className={`w-5 h-5 shrink-0 ${simulationResult.ok === false || simulationResult.status === 'ACTION_REQUISE' ? 'text-amber-500' : 'text-emerald-600'}`} />
+                <span>{simulationResult.masterWorkflow || simulationResult.workflow}</span>
               </span>
               <div className="flex items-center gap-2 text-xs">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                <span className={`px-2.5 py-0.5 rounded-full font-bold ${simulationResult.ok === false || simulationResult.status === 'ACTION_REQUISE' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                   {simulationResult.status}
                 </span>
                 <span className="text-indigo-700 font-mono font-bold">
@@ -512,12 +444,12 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
                   <div key={flow.step} className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                        <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black flex items-center justify-center">
-                          ✓
+                        <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${flow.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {flow.ok ? '✓' : '!'}
                         </span>
                         <span>{flow.workflow}</span>
                       </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${flow.ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
                         {flow.status}
                       </span>
                     </div>
@@ -543,7 +475,7 @@ export default function N8nAutomationsView({ onSimulateEmail }) {
             <span>Moteur Dédié n8n</span>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Accessible en direct sur <code>http://localhost:5678</code> avec tous les flux préconfigurés pour le cabinet.
+            Accessible en direct sur <code>{N8N_UI_URL}</code> avec tous les flux préconfigurés pour le cabinet.
           </p>
         </div>
 

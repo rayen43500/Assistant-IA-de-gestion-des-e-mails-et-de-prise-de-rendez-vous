@@ -1,20 +1,52 @@
 import express from 'express';
+import { internalOnly, internalOrUser } from '../middleware/internalOnly.js';
 import Email from '../models/Email.js';
 import Clinic from '../models/Clinic.js';
 import AuditLog from '../models/AuditLog.js';
-import { protect } from '../middleware/auth.js';
+import { getPractitionerScope } from '../middleware/practitionerScope.js';
+import { protect, authorize } from '../middleware/auth.js';
 import { classifyEmailContent } from '../services/aiClient.js';
 import { processIncomingEmail } from '../services/centralEmailRouter.js';
 import EmailThread from '../models/EmailThread.js';
 import Contact from '../models/Contact.js';
+import { sendGmailMessage, buildReplySubject } from '../services/gmailSenderService.js';
+
+/**
+ * Envoie réellement la réponse validée au patient (même fil Gmail) et met à jour le statut.
+ */
+export async function sendValidatedReply(email, content) {
+  const thread = email.threadId ? await EmailThread.findOne({ threadId: email.threadId }).lean().catch(() => null) : null;
+  const result = await sendGmailMessage({
+    to: email.sender?.email,
+    subject: buildReplySubject(email.subject),
+    body: content,
+    threadId: email.threadId,
+    inReplyTo: email.messageId && email.messageId.includes('@') ? email.messageId : null,
+    references: thread?.references || null,
+  });
+  email.draftReply = content;
+  if (result.sent) {
+    email.finalResponse = content;
+    email.status = 'VALIDATED_AND_SENT';
+    email.processingStatus = 'SENT';
+    email.replyStatus = 'SENT';
+    email.replyGmailMessageId = result.messageId;
+    email.sentAt = new Date();
+  } else {
+    email.replyStatus = 'FAILED';
+    email.replyError = result.reason;
+  }
+  return result;
+}
 
 const router = express.Router();
+const require_valid_id = (id) => /^[0-9a-f]{24}$/i.test(String(id || ''));
 
 // GET /api/emails - Liste des e-mails du cabinet
 router.get('/', protect, async (req, res) => {
   try {
     const { status, intent, search } = req.query;
-    const query = { clinicId: req.clinicId };
+    const query = { clinicId: req.clinicId, ...(await getPractitionerScope(req, 'email')) };
 
     if (status) query.status = status;
     if (intent) query.intent = intent;
@@ -35,7 +67,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // POST /api/emails/ingest - Ingestion d'un e-mail via l'architecture centralisée
-router.post('/ingest', async (req, res) => {
+router.post('/ingest', internalOrUser, async (req, res) => {
   try {
     const {
       sender,
@@ -48,7 +80,9 @@ router.post('/ingest', async (req, res) => {
       body,
       threadId,
       gmailMessageId,
-      receivedAt
+      rfcMessageId,
+      receivedAt,
+      autoSend,
     } = req.body;
 
     const emailOfSender = senderEmail || sender?.email || from || 'patient@example.com';
@@ -64,10 +98,23 @@ router.post('/ingest', async (req, res) => {
       body: body || '',
       threadId: threadId || null,
       gmailMessageId: gmailMessageId || null,
+      rfcMessageId: rfcMessageId || null,
       receivedAt: receivedAt || new Date(),
+      // Envoi automatique de la réponse : explicite dans la requête, sinon AUTO_SEND_INGEST=true
+      autoSend: autoSend !== undefined ? Boolean(autoSend) : process.env.AUTO_SEND_INGEST === 'true',
     });
 
-    return res.status(201).json(result.email || result);
+    if (result.ignored) return res.status(200).json(result);
+    return res.status(201).json({
+      ...(result.email || {}),
+      decision: result.decision,
+      scenario: result.scenario,
+      needsClarification: result.needsClarification,
+      isEmergency: result.isEmergency,
+      reply: result.reply,
+      practitioner: result.practitioner,
+      appointment: result.autoBooking?.confirmed ? result.autoBooking.appointment : null,
+    });
   } catch (error) {
     console.error('[Emails Ingest Error]:', error);
     res.status(500).json({ message: 'Erreur lors de l’ingestion de l’e-mail', error: error.message });
@@ -75,7 +122,7 @@ router.post('/ingest', async (req, res) => {
 });
 
 // POST /api/emails/simulate-scenario - Test instantané des 4 scénarios MediLawAI
-router.post('/simulate-scenario', async (req, res) => {
+router.post('/simulate-scenario', internalOrUser, async (req, res) => {
   try {
     const { scenarioNumber = 1 } = req.body;
     let payload = {};
@@ -145,10 +192,10 @@ router.get('/threads/:threadId', async (req, res) => {
 });
 
 // PUT /api/emails/:id/validate - Validation / modification en 1 clic par le secrétaire
-router.put('/:id/validate', protect, async (req, res) => {
+router.put('/:id/validate', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
     const { draftReply, intent, sendNow } = req.body;
-    const email = await Email.findOne({ _id: req.params.id, clinicId: req.clinicId });
+    const email = await Email.findOne({ _id: req.params.id, clinicId: req.clinicId, ...(await getPractitionerScope(req)) });
 
     if (!email) {
       return res.status(404).json({ message: 'E-mail non trouvé' });
@@ -157,8 +204,15 @@ router.put('/:id/validate', protect, async (req, res) => {
     if (draftReply) email.draftReply = draftReply;
     if (intent) email.intent = intent;
 
-    email.status = sendNow ? 'VALIDATED_AND_SENT' : 'MANUAL_OVERRIDE';
-    email.validatedBy = req.user._id;
+    let sendResult = null;
+    if (sendNow) {
+      sendResult = await sendValidatedReply(email, email.draftReply);
+      if (!sendResult.sent) email.status = 'MANUAL_OVERRIDE';
+    } else {
+      email.status = 'MANUAL_OVERRIDE';
+    }
+    if (require_valid_id(req.user._id)) email.validatedBy = req.user._id;
+    email.validatedAt = new Date();
     await email.save();
 
     await AuditLog.create({
@@ -169,11 +223,15 @@ router.put('/:id/validate', protect, async (req, res) => {
       resourceId: email._id.toString(),
       details: {
         newStatus: email.status,
-        sent: sendNow,
+        sent: Boolean(sendResult?.sent),
+        sendError: sendResult?.sent ? undefined : sendResult?.reason,
       },
     });
 
-    res.json({ message: 'E-mail validé avec succès', email });
+    if (sendNow && !sendResult?.sent) {
+      return res.status(502).json({ message: `Réponse enregistrée mais non envoyée (${sendResult?.reason}). Vérifiez la connexion Gmail.`, email });
+    }
+    res.json({ message: sendNow ? 'Réponse envoyée au patient' : 'Brouillon enregistré', email });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la validation', error: error.message });
   }
@@ -182,12 +240,12 @@ router.put('/:id/validate', protect, async (req, res) => {
 // GET /api/emails/stats - Statistiques pour le Dashboard
 router.get('/stats', protect, async (req, res) => {
   try {
-    const clinicId = req.clinicId;
-    const total = await Email.countDocuments({ clinicId });
-    const pendingValidation = await Email.countDocuments({ clinicId, status: 'PENDING_VALIDATION' });
-    const emergencies = await Email.countDocuments({ clinicId, intent: 'EMERGENCY' });
-    const appointments = await Email.countDocuments({ clinicId, intent: 'APPOINTMENT' });
-    const autoProcessed = await Email.countDocuments({ clinicId, status: 'AUTO_PROCESSED' });
+    const base = { clinicId: req.clinicId, ...(await getPractitionerScope(req, 'email')) };
+    const total = await Email.countDocuments(base);
+    const pendingValidation = await Email.countDocuments({ ...base, status: 'PENDING_VALIDATION' });
+    const emergencies = await Email.countDocuments({ ...base, intent: 'EMERGENCY' });
+    const appointments = await Email.countDocuments({ ...base, intent: 'APPOINTMENT' });
+    const autoProcessed = await Email.countDocuments({ ...base, status: 'AUTO_PROCESSED' });
 
     res.json({
       total,

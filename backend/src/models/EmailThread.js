@@ -83,6 +83,18 @@ const EmailThreadSchema = new mongoose.Schema({
   clarificationPrompt: {
     type: String,
   },
+  // Mémoire de conversation : texte cumulé, contexte de réservation, en-têtes RFC pour répondre dans le fil
+  originalText: {
+    type: String,
+    default: '',
+  },
+  bookingContext: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+  },
+  references: {
+    type: String,
+  },
 }, { timestamps: true });
 
 export default mongoose.models.EmailThread || mongoose.model('EmailThread', EmailThreadSchema);

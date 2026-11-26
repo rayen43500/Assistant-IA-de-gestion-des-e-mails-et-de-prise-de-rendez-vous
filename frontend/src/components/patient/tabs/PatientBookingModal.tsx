@@ -1,147 +1,130 @@
-import React, { useState } from 'react';
-import { 
-  Calendar, 
-  Clock, 
-  ChevronLeft, 
-  ChevronRight, 
-  CheckCircle2, 
-  User, 
-  Phone, 
-  Mail, 
-  Stethoscope, 
-  X, 
-  ShieldCheck, 
+import React, { useState, useEffect } from 'react';
+import {
+  Calendar,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  User,
+  Phone,
+  Mail,
+  Stethoscope,
+  X,
+  ShieldCheck,
   Sparkles,
   ArrowRight,
   AlertCircle,
   Copy
 } from 'lucide-react';
 import { useAppStore } from '../../../stores/useAppStore';
-import { apiCreatePublicGuestBooking } from '../../../services/apiClient';
+import { getPatientContact, savePatientContact, addSavedBookingToken } from '../patientData';
+import { apiCreatePublicGuestBooking, apiFetchPublicDoctors, apiFetchPublicDoctorAvailability, apiErrorMessage } from '../../../services/apiClient';
 
 interface PatientBookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   preselectedDoctor?: any;
+  /** Appelé après une réservation réussie (rafraîchir « Mes rendez-vous ») */
+  onBooked?: () => void;
 }
 
 export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
   isOpen,
   onClose,
-  preselectedDoctor
+  preselectedDoctor,
+  onBooked
 }) => {
-  const { addAppointment, availabilitySettings, isSlotAvailable, showToast } = useAppStore();
+  const { showToast } = useAppStore();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(preselectedDoctor ? 2 : 1);
-  const [selectedDoctor, setSelectedDoctor] = useState(preselectedDoctor || {
-    name: 'Dr. Youssef Ben Salem',
-    specialty: 'Cardiologie & Rythmologie',
-    clinic: 'Cabinet Médical Dr. Ben Salem',
-    address: 'Avenue Habib Bourguiba, Tunis',
-    price: 70
-  });
+  const [selectedDoctor, setSelectedDoctor] = useState<any>(preselectedDoctor || null);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [days, setDays] = useState<{ date: string; label: string; slots: any[] }[]>([]);
+  const [loadingDays, setLoadingDays] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
-  const [selectedDate, setSelectedDate] = useState('2026-11-04');
-  const [selectedSlot, setSelectedSlot] = useState<string | null>('10:00');
-
-  // Patient Info Form
-  const [patientName, setPatientName] = useState('Amine Jaziri');
-  const [patientPhone, setPatientPhone] = useState('+216 98 456 789');
-  const [patientEmail, setPatientEmail] = useState('amine.jaziri@gmail.com');
-  const [reason, setReason] = useState('Consultation de cardiologie & ECG');
+  // Informations du patient (pré-remplies s'il est connecté)
+  const savedContact = getPatientContact();
+  const [patientName, setPatientName] = useState(savedContact.name);
+  const [patientPhone, setPatientPhone] = useState(savedContact.phone);
+  const [patientEmail, setPatientEmail] = useState(savedContact.email);
+  const [reason, setReason] = useState('');
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
 
+  const doctorId = selectedDoctor?._id || selectedDoctor?.id;
+
+  // Étape 1 : praticiens réels
+  useEffect(() => {
+    if (!isOpen || step !== 1 || doctors.length) return;
+    apiFetchPublicDoctors().then((list: any[]) => setDoctors((list || []).filter(d => d.bookingSettings?.onlineBookingEnabled !== false).map(d => ({
+      ...d, id: d._id, clinic: d.tenantId?.name || '',
+    })))).catch(() => setDoctors([]));
+  }, [isOpen, step]);
+
+  // Étape 2 : disponibilités réelles des 14 prochains jours
+  useEffect(() => {
+    if (!isOpen || !doctorId) return;
+    setLoadingDays(true);
+    const base = new Date();
+    const dates = Array.from({ length: 14 }, (_, i) => {
+      const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    });
+    Promise.all(dates.map(date => apiFetchPublicDoctorAvailability(doctorId, date).then((r: any) => ({ date, slots: (r?.slots || []).filter((sl: any) => sl.available) })).catch(() => ({ date, slots: [] }))))
+      .then(res => setDays(res.filter(d => d.slots.length).map(d => ({
+        ...d,
+        label: new Date(`${d.date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }),
+      }))))
+      .finally(() => setLoadingDays(false));
+  }, [isOpen, doctorId]);
+
   if (!isOpen) return null;
 
-  const datesList = [
-    { label: 'Mer 4 Nov', date: '2026-11-04', availableCount: 5 },
-    { label: 'Jeu 5 Nov', date: '2026-11-05', availableCount: 4 },
-    { label: 'Ven 6 Nov', date: '2026-11-06', availableCount: 6 },
-    { label: 'Sam 7 Nov', date: '2026-11-07', availableCount: 2 },
-    { label: 'Lun 9 Nov', date: '2026-11-09', availableCount: 7 }
-  ];
-
-  // Dynamically compute time slots respecting availability (lunch break 12:30-14:00, existing bookings)
-  const baseSlotTimes = [
-    '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:30', '13:00', '13:30',
-    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'
-  ];
-
-  const timeSlots = baseSlotTimes.map(time => {
-    if (selectedSlot === time) {
-      return { time, state: 'selected' as const, label: 'Sélectionné' };
-    }
-    const check = isSlotAvailable(selectedDate, time);
-    if (!check.available) {
-      if (check.reason?.includes('Pause Déjeuner')) {
-        return { time, state: 'unavailable' as const, label: 'Pause' };
-      }
-      if (check.reason?.includes('déjà réservé')) {
-        return { time, state: 'reserved' as const, label: 'Réservé' };
-      }
-      return { time, state: 'unavailable' as const, label: 'Fermé' };
-    }
-    return { time, state: 'available' as const, label: 'Libre' };
-  });
+  const datesList = days.slice(0, 9).map(d => ({ label: d.label, date: d.date, availableCount: d.slots.length }));
+  const timeSlots = (days.find(d => d.date === selectedDate)?.slots || []).map((sl: any) => ({ time: sl.start, state: 'available' as const }));
+  const longSelectedDate = selectedDate ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
 
   const handleConfirmBooking = async () => {
-    if (!selectedSlot) return;
-
-    const duration = availabilitySettings.consultationDuration || 30;
-    const [h, m] = selectedSlot.split(':').map(Number);
-    const endMinutes = h * 60 + m + duration;
-    const endH = Math.floor(endMinutes / 60).toString().padStart(2, '0');
-    const endM = (endMinutes % 60).toString().padStart(2, '0');
-
+    if (!selectedSlot || !doctorId) return;
+    if (!patientName.trim() || !/@/.test(patientEmail) || patientPhone.trim().length < 8) {
+      setBookingError('Nom, e-mail valide et téléphone sont obligatoires.');
+      return;
+    }
     setBookingSubmitting(true);
-    let generatedToken = `token_${Date.now()}_guest`;
-
+    setBookingError(null);
     try {
       const res = await apiCreatePublicGuestBooking({
-        doctorId: selectedDoctor.id || 'doc-1',
+        doctorId,
         date: selectedDate,
         startTime: selectedSlot,
-        patientName,
-        patientEmail,
-        patientPhone,
-        reason,
-        idempotencyKey: `guest-book-${patientEmail}-${selectedDate}-${selectedSlot}`
+        patientName: patientName.trim(),
+        patientEmail: patientEmail.trim(),
+        patientPhone: patientPhone.trim(),
+        reason: reason.trim() || 'Consultation',
+        idempotencyKey: `guest-book-${patientEmail.trim().toLowerCase()}-${doctorId}-${selectedDate}-${selectedSlot}`
       });
-      if (res?.managementToken) {
-        generatedToken = res.managementToken;
+      const token = res?.managementToken;
+      setGuestToken(token || null);
+      // Mémoriser la réservation sur cet appareil (onglet « Mes rendez-vous »)
+      if (token) addSavedBookingToken(token);
+      savePatientContact({ name: patientName.trim(), email: patientEmail.trim(), phone: patientPhone.trim() });
+      onBooked?.();
+      setStep(5);
+      showToast({ title: 'Rendez-vous confirmé', message: `${longSelectedDate} à ${selectedSlot} avec ${selectedDoctor?.name}.`, type: 'success' });
+    } catch (err: any) {
+      setBookingError(apiErrorMessage(err, 'La réservation a échoué.'));
+      // Créneau pris entre-temps : on rafraîchit les disponibilités
+      if (err?.response?.status === 409) {
+        setSelectedSlot(null);
+        setStep(3);
+        apiFetchPublicDoctorAvailability(doctorId, selectedDate).then((r: any) => setDays(prev => prev.map(d => d.date === selectedDate ? { ...d, slots: (r?.slots || []).filter((sl: any) => sl.available) } : d))).catch(() => {});
       }
-    } catch {
-      // Fallback local instantané si backend distant non accessible
     } finally {
-      setGuestToken(generatedToken);
       setBookingSubmitting(false);
     }
-
-    addAppointment({
-      id: `apt-${Date.now()}`,
-      patientName,
-      patientEmail,
-      patientPhone,
-      practitionerName: selectedDoctor.name,
-      serviceName: reason,
-      date: selectedDate,
-      timeStart: selectedSlot,
-      timeEnd: `${endH}:${endM}`,
-      durationMinutes: duration,
-      status: 'CONFIRMED',
-      reminderSent24h: true,
-      googleCalendarSynced: true,
-      priceTND: selectedDoctor.price || 70
-    });
-
-    setStep(5); // Confirmation screen
-    showToast({
-      title: 'Rendez-vous réservé avec succès !',
-      message: `Créneau de ${selectedSlot} (${duration} min) confirmé avec le ${selectedDoctor.name}.`,
-      type: 'success'
-    });
   };
 
   return (
@@ -174,17 +157,17 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {bookingError && step !== 5 && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">{bookingError}</div>
+          )}
           {/* STEP 1: Select Doctor */}
           {step === 1 && (
             <div className="space-y-3">
-              {[
-                { name: 'Dr. Youssef Ben Salem', specialty: 'Cardiologie & Rythmologie', clinic: 'Cabinet Médical Dr. Ben Salem', price: 70 },
-                { name: 'Dr. Amira Khemir', specialty: 'Cardiologie Pédiatrique', clinic: 'Cabinet Médical Dr. Ben Salem', price: 70 },
-                { name: 'Dr. Mehdi Chaouch', specialty: 'Chirurgie Dentaire', clinic: 'Clinique Dentaire Les Berges du Lac', price: 60 }
-              ].map((doc, dIdx) => (
+              {doctors.length === 0 && <p className="text-xs text-slate-400 text-center py-6">Chargement des praticiens…</p>}
+              {doctors.map((doc, dIdx) => (
                 <div
                   key={dIdx}
-                  onClick={() => { setSelectedDoctor(doc); setStep(2); }}
+                  onClick={() => { setSelectedDoctor(doc); setSelectedDate(''); setSelectedSlot(null); setStep(2); }}
                   className="p-4 rounded-2xl border border-[#E8EDF4] hover:border-[#2563EB] hover:bg-blue-50/40 cursor-pointer transition-all flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-3">
@@ -194,7 +177,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
                     <div>
                       <div className="font-bold text-xs text-[#14213D] group-hover:text-[#2563EB]">{doc.name}</div>
                       <div className="text-[11px] text-slate-500">{doc.specialty}</div>
-                      <div className="text-[10px] text-slate-400">{doc.clinic} • Tarif CNAM {doc.price} DT</div>
+                      <div className="text-[10px] text-slate-400">{doc.clinic} • {doc.appointmentDuration || 30} min</div>
                     </div>
                   </div>
                   <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#2563EB] transition-colors" />
@@ -208,23 +191,25 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
             <div className="space-y-4">
               <div className="p-3 bg-blue-50/60 rounded-2xl border border-blue-100 text-xs text-blue-900 flex items-center gap-2.5">
                 <Stethoscope className="w-4 h-4 text-[#2563EB] shrink-0" />
-                <span className="truncate">Praticien : <strong>{selectedDoctor.name}</strong> ({selectedDoctor.specialty})</span>
+                <span className="truncate">Praticien : <strong>{selectedDoctor?.name}</strong> ({selectedDoctor?.specialty})</span>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-2">Choisissez le jour de consultation :</label>
+                {loadingDays && <p className="text-xs text-slate-400 py-4 text-center">Recherche des disponibilités…</p>}
+                {!loadingDays && datesList.length === 0 && <p className="text-xs text-slate-500 py-4 text-center">Aucun créneau disponible dans les 14 prochains jours. Contactez le cabinet.</p>}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                   {datesList.map(d => (
                     <button
                       key={d.date}
-                      onClick={() => { setSelectedDate(d.date); setStep(3); }}
+                      onClick={() => { setSelectedDate(d.date); setSelectedSlot(null); setStep(3); }}
                       className={`p-3.5 rounded-2xl border text-center transition-all ${
                         selectedDate === d.date
                           ? 'border-[#2563EB] bg-blue-50/70 text-[#2563EB] font-bold shadow-xs ring-1 ring-[#2563EB]'
                           : 'border-[#E8EDF4] hover:bg-slate-50 text-slate-700 font-semibold'
                       }`}
                     >
-                      <div className="text-xs">{d.label}</div>
+                      <div className="text-xs capitalize">{d.label}</div>
                       <span className="text-[10px] text-emerald-600 block mt-1 font-medium">
                         {d.availableCount} créneaux
                       </span>
@@ -239,7 +224,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
           {step === 3 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs text-slate-600">
-                <span className="font-bold text-[#14213D]">{selectedDate} avec {selectedDoctor.name}</span>
+                <span className="font-bold text-[#14213D] capitalize">{longSelectedDate} avec {selectedDoctor?.name}</span>
                 <button onClick={() => setStep(2)} className="text-[#2563EB] font-bold hover:underline">
                   Changer date
                 </button>
@@ -312,12 +297,12 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
             <div className="space-y-4">
               <div className="p-3 bg-blue-50/70 rounded-2xl border border-blue-200/60 text-xs text-blue-900 space-y-1">
                 <div className="font-bold">Récapitulatif du Créneau :</div>
-                <div>{selectedDate} à {selectedSlot} • {selectedDoctor.name} ({selectedDoctor.price} DT)</div>
+                <div className="capitalize">{longSelectedDate} à {selectedSlot} • {selectedDoctor?.name}</div>
               </div>
 
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Nom et Prénom du Patient</label>
+                  <label className="block font-bold text-slate-700 mb-1">Nom et prénom *</label>
                   <input
                     type="text"
                     required
@@ -328,7 +313,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Numéro de Téléphone (Pour le rappel WhatsApp 24h)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Téléphone *</label>
                   <input
                     type="tel"
                     required
@@ -339,7 +324,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Adresse E-mail</label>
+                  <label className="block font-bold text-slate-700 mb-1">Adresse e-mail * (confirmation et rappel)</label>
                   <input
                     type="email"
                     required
@@ -350,7 +335,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Motif de la Consultation</label>
+                  <label className="block font-bold text-slate-700 mb-1">Motif de la consultation (facultatif)</label>
                   <input
                     type="text"
                     value={reason}
@@ -383,7 +368,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
               <div>
                 <h3 className="text-lg font-black text-[#14213D]">Rendez-vous Confirmé !</h3>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Votre rendez-vous a été enregistré dans le calendrier du praticien et synchronisé Google Calendar.
+                  Votre rendez-vous est enregistré dans l’agenda du praticien. Une confirmation vous est envoyée par e-mail.
                 </p>
               </div>
 
@@ -391,20 +376,17 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
               <div className="p-4 bg-[#F7F9FC] rounded-2xl border border-[#E8EDF4] text-xs text-left space-y-2">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Praticien :</span>
-                  <span className="font-bold text-[#14213D]">{selectedDoctor.name}</span>
+                  <span className="font-bold text-[#14213D]">{selectedDoctor?.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Date & Heure :</span>
-                  <span className="font-bold text-blue-600">{selectedDate} à {selectedSlot}</span>
+                  <span className="font-bold text-blue-600 capitalize">{longSelectedDate} à {selectedSlot}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Lieu :</span>
-                  <span className="font-medium text-slate-700">{selectedDoctor.clinic}</span>
+                  <span className="font-medium text-slate-700">{selectedDoctor?.clinic || selectedDoctor?.tenantId?.name || ''}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Tarif indicatif CNAM :</span>
-                  <span className="font-bold text-slate-800">{selectedDoctor.price} DT</span>
-                </div>
+
               </div>
 
               {/* Guest Management Token Card */}
@@ -417,7 +399,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
                     </span>
                     <button
                       onClick={() => {
-                        const url = `${window.location.origin}/rendez-vous/gestion?token=${encodeURIComponent(guestToken)}`;
+                        const url = `${window.location.origin}/?token=${encodeURIComponent(guestToken)}`;
                         navigator.clipboard.writeText(url);
                         showToast({
                           title: 'Lien copié !',
@@ -435,7 +417,7 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
                     Conservez ce lien pour modifier l'horaire ou annuler ce rendez-vous en 1 clic sans devoir vous connecter.
                   </p>
                   <div className="font-mono text-[10px] bg-white p-1.5 rounded-lg border border-blue-200 text-slate-700 truncate">
-                    {`${window.location.origin}/rendez-vous/gestion?token=${guestToken}`}
+                    {`${window.location.origin}/?token=${guestToken}`}
                   </div>
                 </div>
               )}
@@ -443,10 +425,10 @@ export const PatientBookingModal: React.FC<PatientBookingModalProps> = ({
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
                 <span className="font-bold flex items-center justify-center gap-1.5">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  Rappel Automatique WhatsApp 24h
+                  Rappel automatique la veille
                 </span>
                 <p className="text-[10px] text-emerald-700">
-                  Vous recevrez un message de rappel sur le {patientPhone} la veille à 08h00 avec l'itinéraire.
+                  Un e-mail de rappel est envoyé à {patientEmail} la veille du rendez-vous à 08h00.
                 </p>
               </div>
 

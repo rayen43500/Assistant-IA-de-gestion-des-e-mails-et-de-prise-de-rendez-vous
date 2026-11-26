@@ -1,8 +1,13 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { protect } from '../middleware/auth.js';
+import { protect, JWT_SECRET } from '../middleware/auth.js';
 import { checkHealthAI, classifyEmailContent } from '../services/aiClient.js';
+import mongoose from 'mongoose';
+import crypto from 'crypto';
+import { sendGmailMessage } from '../services/gmailSenderService.js';
+import Doctor from '../models/Doctor.js';
 import { evaluateBookingRequest } from '../services/smartBookingDecisionService.js';
+import { identifyPractitioner } from '../services/centralEmailRouter.js';
 import Email from '../models/Email.js';
 import Appointment from '../models/Appointment.js';
 import Clinic from '../models/Clinic.js';
@@ -33,7 +38,7 @@ router.get('/daily-summary', async (req, res) => {
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       try {
         const token = req.headers.authorization.split(' ')[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_cabinet_ai_2026');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const user = await User.findById(decoded.id);
         if (user) clinicId = user.clinicId;
       } catch (err) {
@@ -89,34 +94,82 @@ router.get('/daily-summary', async (req, res) => {
 });
 
 // POST /api/ai/patient-chat-booking - Chat interactif de réservation intelligente pour l'Espace Patient
+/**
+ * POST /api/ai/patient-chat-booking — Chat de réservation de l'espace patient.
+ * Mêmes règles que l'e-mail : vrai praticien, vraies disponibilités, et coordonnées
+ * obligatoires avant toute réservation (le cabinet doit pouvoir joindre le patient).
+ */
 router.post('/patient-chat-booking', async (req, res) => {
   try {
-    const { message, patientInfo, selectedProfession } = req.body;
-
-    if (!message || !message.trim()) {
+    const { message, patientInfo = {}, selectedProfession, context = {} } = req.body || {};
+    if (!message || !String(message).trim()) {
       return res.status(400).json({ message: 'Message requis' });
     }
+    const text = String(message).slice(0, 2000);
+
+    // Praticien cité dans le message (ou déjà choisi dans la conversation)
+    const match = await identifyPractitioner({ recipient: '', subject: '', body: text });
+    let practitioner = match.matched ? match.practitioner : null;
+    if (!practitioner && context.practitionerId && mongoose.isValidObjectId(String(context.practitionerId))) {
+      practitioner = await Doctor.findOne({ _id: context.practitionerId, status: 'ACTIVE' }).lean();
+    }
+    if (!practitioner && selectedProfession && mongoose.connection.readyState === 1) {
+      practitioner = await Doctor.findOne({ profession: selectedProfession === 'AVOCAT' ? 'AVOCAT' : 'MEDECIN', status: 'ACTIVE' }).lean();
+    }
+
+    const email = String(patientInfo.email || '').trim().toLowerCase();
+    const phone = String(patientInfo.phone || '').trim();
+    const hasContact = /@/.test(email) && phone.length >= 8;
 
     const decision = await evaluateBookingRequest({
-      messageText: `${selectedProfession ? 'Profession: ' + selectedProfession + ' ' : ''}${message}`,
-      patientInfo: {
-        name: patientInfo?.name || 'Patient',
-        email: patientInfo?.email || 'patient@medilawai.com',
-        phone: patientInfo?.phone || '+216 98 123 456',
-        source: 'PATIENT_PORTAL',
-      },
+      messageText: text,
+      patientInfo: { name: patientInfo.name || 'Patient', email, phone, source: 'PATIENT_PORTAL' },
+      practitioner,
+      context: { date: context.date, time: context.time, proposedSlots: context.proposedSlots },
+      dryRun: !hasContact,
     });
+
+    // Sans coordonnées : on garde le créneau en mémoire et on les demande
+    if (!hasContact && decision.decision === 'DIRECT_CONFIRMATION') {
+      return res.json({
+        success: true,
+        decision: 'NEED_CONTACT',
+        confirmed: false,
+        replyText: `Le créneau du ${decision.date} à ${decision.time} avec ${decision.practitioner?.name} est libre. Pour le réserver, indiquez votre e-mail et votre téléphone dans « Mon profil » (ou utilisez « Prendre un rendez-vous »), puis renvoyez votre message.`,
+        proposedSlots: [],
+        practitioner: decision.practitioner ? { id: decision.practitioner._id, name: decision.practitioner.name } : null,
+        context: { practitionerId: decision.practitioner?._id, date: decision.date, time: decision.time },
+      });
+    }
+
+    // RDV réservé : lien de gestion sans compte (consultation / annulation) + e-mail de confirmation
+    let managementToken = null;
+    if (decision.persisted && decision.appointment?._id) {
+      managementToken = crypto.randomBytes(32).toString('hex');
+      await Appointment.updateOne({ _id: decision.appointment._id }, { guestManagementToken: managementToken });
+      const manageUrl = `${(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '')}/?token=${managementToken}`;
+      sendGmailMessage({ to: email, subject: `Confirmation de votre rendez-vous du ${decision.date} à ${decision.time}`, body: `${decision.message}
+
+Consulter ou annuler : ${manageUrl}` }).catch(() => {});
+    }
 
     return res.json({
       success: true,
+      managementToken,
       decision: decision.decision,
       confirmed: decision.confirmed || false,
       replyText: decision.message,
       proposedSlots: decision.proposedSlots || [],
-      appointment: decision.appointment || null,
-      practitioner: decision.practitioner || null,
+      appointment: decision.persisted ? decision.appointment : null,
+      practitioner: decision.practitioner ? { id: decision.practitioner._id, name: decision.practitioner.name } : null,
       date: decision.date || null,
       time: decision.time || null,
+      context: {
+        practitionerId: decision.practitioner?._id,
+        date: decision.context?.date || decision.date,
+        time: decision.context?.time,
+        proposedSlots: decision.proposedSlotObjects || [],
+      },
     });
   } catch (error) {
     console.error('[Patient Chat Booking Error]:', error);

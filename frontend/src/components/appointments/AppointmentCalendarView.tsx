@@ -1,13 +1,22 @@
-import React, { useState } from 'react';
-import { 
-  Calendar as CalendarIcon, 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
-  Clock, 
-  User, 
-  CheckCircle2, 
-  X, 
+import React, { useState, useEffect, useMemo } from 'react';
+import { apiGetGoogleStatus } from '../../services/apiClient';
+
+// Dates locales (pas d'UTC : évite le décalage d'un jour le soir)
+const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const fromISO = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDaysISO = (iso: string, n: number) => { const d = fromISO(iso); d.setDate(d.getDate() + n); return toISO(d); };
+const DAY_NAMES = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+const MONTHS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+const longDate = (iso: string) => { const d = fromISO(iso); return `${DAY_NAMES[d.getDay()]} ${d.getDate()} ${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`; };
+import {
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Clock,
+  User,
+  CheckCircle2,
+  X,
   AlertCircle,
   ExternalLink,
   ShieldCheck,
@@ -23,18 +32,28 @@ import { useAppStore } from '../../stores/useAppStore';
 import type { AppointmentItem } from '../../types';
 
 export const AppointmentCalendarView: React.FC = () => {
-  const { 
-    sector, 
-    appointments, 
-    addAppointment, 
-    updateAppointment, 
-    cancelAppointment, 
-    deleteAppointment, 
-    confirmAppointment, 
+  const {
+    sector,
+    appointments,
+    addAppointment,
+    updateAppointment,
+    cancelAppointment,
     availabilitySettings,
     isSlotAvailable,
-    showToast 
+    showToast,
+    currentUser,
+    loadAppointments
   } = useAppStore();
+
+  const todayISO = toISO(new Date());
+  const [anchorDate, setAnchorDate] = useState<string>(todayISO);
+  const [calendarInfo, setCalendarInfo] = useState<{ connected: boolean; email: string }>({ connected: false, email: '' });
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    loadAppointments().then(() => setRefreshedAt(new Date()));
+    apiGetGoogleStatus().then((st) => setCalendarInfo({ connected: Boolean(st?.connected), email: st?.email || '' })).catch(() => {});
+  }, []);
 
   const [selectedView, setSelectedView] = useState<'WEEK' | 'DAY' | 'MONTH'>('WEEK');
   const [showModal, setShowModal] = useState(false);
@@ -45,7 +64,7 @@ export const AppointmentCalendarView: React.FC = () => {
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('+216 ');
   const [patientEmail, setPatientEmail] = useState('');
-  const [aptDate, setAptDate] = useState('2026-11-03');
+  const [aptDate, setAptDate] = useState(toISO(new Date()));
   const [aptTime, setAptTime] = useState('14:00');
   const [aptService, setAptService] = useState(sector === 'MEDICAL' ? 'Consultation Cardiologie' : 'Consultation Juridique');
   const [collisionWarning, setCollisionWarning] = useState<string | null>(null);
@@ -61,15 +80,29 @@ export const AppointmentCalendarView: React.FC = () => {
     '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'
   ];
 
-  const weekDays = [
-    { name: 'Lundi', date: '2026-11-02' },
-    { name: 'Mardi (Aujourd’hui)', date: '2026-11-03' },
-    { name: 'Mercredi', date: '2026-11-04' },
-    { name: 'Jeudi', date: '2026-11-05' },
-    { name: 'Vendredi', date: '2026-11-06' }
-  ];
+  // Semaine (lundi → vendredi) contenant la date affichée
+  const weekDays = useMemo(() => {
+    const d = fromISO(anchorDate);
+    const monday = addDaysISO(anchorDate, -((d.getDay() + 6) % 7));
+    return [0, 1, 2, 3, 4].map((i) => {
+      const date = addDaysISO(monday, i);
+      return { name: DAY_NAMES[fromISO(date).getDay()] + (date === todayISO ? ' (Aujourd’hui)' : ''), date };
+    });
+  }, [anchorDate, todayISO]);
 
-  const handleCheckAndSave = (e: React.FormEvent) => {
+  const navigate = (direction: -1 | 1) => {
+    const step = selectedView === 'DAY' ? 1 : selectedView === 'WEEK' ? 7 : 0;
+    if (step) return setAnchorDate(addDaysISO(anchorDate, direction * step));
+    const d = fromISO(anchorDate);
+    setAnchorDate(toISO(new Date(d.getFullYear(), d.getMonth() + direction, 1)));
+  };
+  const periodLabel = selectedView === 'DAY'
+    ? longDate(anchorDate)
+    : selectedView === 'WEEK'
+      ? `Semaine du ${fromISO(weekDays[0].date).getDate()} au ${longDate(weekDays[4].date).split(' ').slice(1).join(' ')}`
+      : `${MONTHS_FR[fromISO(anchorDate).getMonth()]} ${fromISO(anchorDate).getFullYear()}`;
+
+  const handleCheckAndSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setCollisionWarning(null);
 
@@ -91,7 +124,7 @@ export const AppointmentCalendarView: React.FC = () => {
       patientName,
       patientEmail,
       patientPhone,
-      practitionerName: sector === 'MEDICAL' ? 'Dr. Youssef Ben Salem' : 'Me. Selim Trabelsi',
+      practitionerName: currentUser?.name || '',
       serviceName: aptService,
       date: aptDate,
       timeStart: aptTime,
@@ -99,14 +132,17 @@ export const AppointmentCalendarView: React.FC = () => {
       durationMinutes: duration,
       status: 'SCHEDULED',
       reminderSent24h: false,
-      googleCalendarSynced: true,
-      priceTND: sector === 'MEDICAL' ? 70 : 120
+      googleCalendarSynced: false
     };
 
-    addAppointment(newApt);
+    const result = await addAppointment(newApt);
+    if (!result.success) {
+      setCollisionWarning(result.error || 'Ce créneau n’est pas disponible.');
+      return;
+    }
     showToast({
-      title: 'Rendez-vous créé avec succès !',
-      message: `Créneau de ${aptTime} enregistré (${duration} min) et synchronisé avec Google Calendar.`,
+      title: 'Rendez-vous enregistré',
+      message: `${patientName} — ${longDate(aptDate)} à ${aptTime} (${duration} min).`,
       type: 'success'
     });
     setShowModal(false);
@@ -123,7 +159,7 @@ export const AppointmentCalendarView: React.FC = () => {
     setIsEditingSelected(false);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedApt) return;
 
@@ -140,11 +176,20 @@ export const AppointmentCalendarView: React.FC = () => {
       }
     }
 
-    updateAppointment(selectedApt.id, {
-      date: editDate,
-      timeStart: editTime,
-      serviceName: editService
-    });
+    if (editTime !== selectedApt.timeStart || editDate !== selectedApt.date || editService !== selectedApt.serviceName) {
+      const [eh, em] = editTime.split(':').map(Number);
+      const endM = eh * 60 + em + (selectedApt.durationMinutes || 30);
+      const moved = await addAppointment({
+        ...selectedApt,
+        date: editDate,
+        timeStart: editTime,
+        timeEnd: `${String(Math.floor(endM / 60)).padStart(2, '0')}:${String(endM % 60).padStart(2, '0')}`,
+        serviceName: editService
+      });
+      if (!moved.success) return;
+      await cancelAppointment(selectedApt.id);
+      await loadAppointments();
+    }
 
     setSelectedApt({
       ...selectedApt,
@@ -156,7 +201,7 @@ export const AppointmentCalendarView: React.FC = () => {
     setIsEditingSelected(false);
     showToast({
       title: 'Rendez-vous modifié',
-      message: `Le rendez-vous de ${selectedApt.patientName} a été déplacé au ${editDate} à ${editTime}.`,
+      message: `Le rendez-vous de ${selectedApt.patientName} est déplacé au ${longDate(editDate)} à ${editTime}.`,
       type: 'success'
     });
   };
@@ -168,20 +213,11 @@ export const AppointmentCalendarView: React.FC = () => {
     }
     showToast({
       title: 'Rendez-vous annulé',
-      message: 'Le créneau a été libéré sur Google Calendar et le planning.',
+      message: 'Le créneau est de nouveau disponible.',
       type: 'warning'
     });
   };
 
-  const handleDeleteApt = (id: string) => {
-    deleteAppointment(id);
-    setSelectedApt(null);
-    showToast({
-      title: 'Rendez-vous supprimé',
-      message: 'Le rendez-vous a été définitivement supprimé.',
-      type: 'info'
-    });
-  };
 
   return (
     <div className="space-y-6 font-sans">
@@ -189,10 +225,15 @@ export const AppointmentCalendarView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-black text-[#14213D] tracking-tight">Agenda & Prise de Rendez-vous</h1>
-          <p className="text-xs text-slate-500">Protection anti-double réservation & synchronisation Google Calendar en direct</p>
+          <p className="text-xs text-slate-500">{periodLabel}</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="p-1 bg-white border border-[#E5EAF2] rounded-xl flex items-center text-xs font-bold text-slate-600 shadow-xs">
+            <button onClick={() => navigate(-1)} className="px-2.5 py-1.5 rounded-lg hover:bg-slate-100" aria-label="Période précédente">‹</button>
+            <button onClick={() => setAnchorDate(todayISO)} className="px-3 py-1.5 rounded-lg hover:bg-slate-100">Aujourd’hui</button>
+            <button onClick={() => navigate(1)} className="px-2.5 py-1.5 rounded-lg hover:bg-slate-100" aria-label="Période suivante">›</button>
+          </div>
           <div className="p-1 bg-white border border-[#E5EAF2] rounded-xl flex items-center text-xs font-bold text-slate-600 shadow-xs">
             <button
               onClick={() => setSelectedView('DAY')}
@@ -228,10 +269,10 @@ export const AppointmentCalendarView: React.FC = () => {
       <div className="p-3.5 bg-white rounded-xl border border-[#E5EAF2] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
         <div className="flex flex-wrap items-center gap-4 text-slate-700 font-medium">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-            <span className="truncate">Google Calendar : <b>{sector === 'MEDICAL' ? 'dr.bensalem@cabinet-ai.tn' : 'me.trabelsi@avocats-tunis.tn'}</b></span>
+            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${calendarInfo.connected ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+            <span className="truncate">Google Calendar : <b>{calendarInfo.connected ? calendarInfo.email : 'non connecté (agenda interne)'}</b></span>
           </div>
-          
+
           <div className="hidden sm:flex items-center gap-1.5 text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200/80">
             <Coffee className="w-3.5 h-3.5 text-amber-600" />
             <span className="font-semibold text-[11px]">Pause Déjeuner : 12:30 - 14:00</span>
@@ -239,11 +280,13 @@ export const AppointmentCalendarView: React.FC = () => {
 
           <div className="hidden sm:flex items-center gap-1.5 text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200/80">
             <Bot className="w-3.5 h-3.5 text-blue-600" />
-            <span className="font-semibold text-[11px]">IA Synchronisée ({availabilitySettings.consultationDuration} min)</span>
+            <span className="font-semibold text-[11px]">Consultations de {availabilitySettings.consultationDuration} min</span>
           </div>
         </div>
 
-        <span className="text-[11px] text-slate-400 font-mono shrink-0">Dernière synchronisation : Il y a 1 min</span>
+        <button onClick={() => loadAppointments().then(() => setRefreshedAt(new Date()))} className="text-[11px] text-slate-500 hover:text-blue-600 font-mono shrink-0">
+          {refreshedAt ? `Actualisé à ${refreshedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} ↻` : 'Chargement…'}
+        </button>
       </div>
 
       {/* Calendar Grid (Week View, Day View, Month View) */}
@@ -254,7 +297,7 @@ export const AppointmentCalendarView: React.FC = () => {
             <div className="grid grid-cols-6 border-b border-[#E5EAF2] bg-[#F7F9FC] text-center text-xs font-bold text-slate-700">
               <div className="p-3 border-r border-[#E5EAF2] text-slate-400">Créneau</div>
               {weekDays.map(d => (
-                <div key={d.date} className={`p-3 border-r border-[#E5EAF2] last:border-r-0 ${d.date === '2026-11-03' ? 'bg-blue-50/60 text-blue-700' : ''}`}>
+                <div key={d.date} className={`p-3 border-r border-[#E5EAF2] last:border-r-0 ${d.date === todayISO ? 'bg-blue-50/60 text-blue-700' : ''}`}>
                   <div>{d.name}</div>
                   <div className="text-[10px] text-slate-400 font-normal">{d.date}</div>
                 </div>
@@ -277,14 +320,14 @@ export const AppointmentCalendarView: React.FC = () => {
                     const isLunchBreak = slotStatus.reason?.includes('Pause Déjeuner') || (slot >= '12:30' && slot < '14:00');
 
                     return (
-                      <div 
-                        key={`${d.date}-${slot}`} 
+                      <div
+                        key={`${d.date}-${slot}`}
                         className={`p-1.5 border-r border-[#E5EAF2] last:border-r-0 transition-colors relative ${
-                          d.date === '2026-11-03' ? 'bg-blue-50/10' : ''
+                          d.date === todayISO ? 'bg-blue-50/10' : ''
                         }`}
                       >
                         {apt ? (
-                          <div 
+                          <div
                             onClick={() => openAptDetails(apt)}
                             className="h-full p-2 rounded-lg bg-blue-100/80 hover:bg-blue-200/90 border border-blue-200 text-blue-900 flex flex-col justify-between shadow-xs cursor-pointer transition-all"
                           >
@@ -292,7 +335,7 @@ export const AppointmentCalendarView: React.FC = () => {
                             <div className="text-[10px] text-blue-700 truncate">{apt.serviceName}</div>
                             <div className="text-[9px] text-slate-500 font-mono flex items-center justify-between mt-1">
                               <span>{apt.timeStart} - {apt.timeEnd}</span>
-                              <span className="text-emerald-700 font-bold">Google Synced</span>
+                              {apt.googleCalendarSynced && <span className="text-emerald-700 font-bold">Google ✓</span>}
                             </div>
                           </div>
                         ) : isLunchBreak ? (
@@ -332,17 +375,18 @@ export const AppointmentCalendarView: React.FC = () => {
         <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-[#E5EAF2] pb-3">
             <div>
-              <h2 className="text-base font-bold text-[#14213D]">Planning Journalier — Mardi 03 Novembre 2026</h2>
+              <h2 className="text-base font-bold text-[#14213D]">Planning — {longDate(anchorDate)}</h2>
               <p className="text-xs text-slate-500">Vue horaire détaillée avec contacts patients et pauses</p>
             </div>
-            <span className="text-xs font-bold text-[#2563EB] bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
-              Aujourd'hui
-            </span>
+            {anchorDate === todayISO && (
+              <span className="text-xs font-bold text-[#2563EB] bg-blue-50 px-3 py-1 rounded-full border border-blue-200">Aujourd'hui</span>
+            )}
           </div>
 
           <div className="divide-y divide-slate-100">
             {hours.map(slot => {
-              const apt = appointments.find(a => a.date === '2026-11-03' && a.timeStart === slot && a.status !== 'CANCELLED');
+              const apt = appointments.find(a => a.date === anchorDate && a.timeStart === slot && a.status !== 'CANCELLED');
+              const dayStatus = isSlotAvailable(anchorDate, slot);
               const isLunch = slot >= '12:30' && slot < '14:00';
 
               return (
@@ -351,7 +395,7 @@ export const AppointmentCalendarView: React.FC = () => {
 
                   <div className="flex-1">
                     {apt ? (
-                      <div 
+                      <div
                         onClick={() => openAptDetails(apt)}
                         className="p-3 bg-blue-50 hover:bg-blue-100/70 border border-blue-200 rounded-xl cursor-pointer transition-colors flex items-center justify-between"
                       >
@@ -360,11 +404,13 @@ export const AppointmentCalendarView: React.FC = () => {
                           <div className="text-slate-600 text-xs">{apt.serviceName} • {apt.patientPhone}</div>
                         </div>
                         <div className="text-right">
-                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                            Google Synced
-                          </span>
+                          {apt.googleCalendarSynced && (
+                            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">Google ✓</span>
+                          )}
                         </div>
                       </div>
+                    ) : !isLunch && !dayStatus.available ? (
+                      <div className="p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 italic">{dayStatus.reason}</div>
                     ) : isLunch ? (
                       <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-amber-900 flex items-center gap-2">
                         <Coffee className="w-4 h-4 text-amber-600" />
@@ -375,7 +421,7 @@ export const AppointmentCalendarView: React.FC = () => {
                         <span className="text-slate-400 italic">Créneau disponible ({availabilitySettings.consultationDuration} min)</span>
                         <button
                           onClick={() => {
-                            setAptDate('2026-11-03');
+                            setAptDate(anchorDate);
                             setAptTime(slot);
                             setCollisionWarning(null);
                             setShowModal(true);
@@ -399,12 +445,9 @@ export const AppointmentCalendarView: React.FC = () => {
         <div className="bg-white rounded-2xl border border-[#E5EAF2] shadow-xs p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-[#E5EAF2] pb-3">
             <div>
-              <h2 className="text-base font-bold text-[#14213D]">Vue Mensuelle — Novembre 2026</h2>
-              <p className="text-xs text-slate-500">Aperçu général des 30 jours et volume de consultations</p>
+              <h2 className="text-base font-bold text-[#14213D]">Vue mensuelle — {periodLabel}</h2>
+              <p className="text-xs text-slate-500">Cliquez sur un jour pour ouvrir son planning</p>
             </div>
-            <span className="text-xs font-bold text-slate-600 bg-[#F7F9FC] border border-[#E8EDF4] px-3 py-1 rounded-xl">
-              Novembre 2026
-            </span>
           </div>
 
           <div className="grid grid-cols-7 gap-2">
@@ -414,21 +457,25 @@ export const AppointmentCalendarView: React.FC = () => {
               </div>
             ))}
 
-            {Array.from({ length: 30 }, (_, i) => {
+            {Array.from({ length: (fromISO(anchorDate.slice(0, 8) + '01').getDay() + 6) % 7 }, (_, i) => (
+              <div key={`blank-${i}`} />
+            ))}
+            {Array.from({ length: new Date(fromISO(anchorDate).getFullYear(), fromISO(anchorDate).getMonth() + 1, 0).getDate() }, (_, i) => {
               const dayNum = i + 1;
-              const dateStr = `2026-11-${dayNum.toString().padStart(2, '0')}`;
+              const dateStr = `${anchorDate.slice(0, 8)}${dayNum.toString().padStart(2, '0')}`;
               const dayApts = appointments.filter(a => a.date === dateStr && a.status !== 'CANCELLED');
-              const isToday = dayNum === 3;
+              const isToday = dateStr === todayISO;
 
               return (
                 <div
                   key={dayNum}
                   onClick={() => {
+                    setAnchorDate(dateStr);
                     setSelectedView('DAY');
                   }}
                   className={`min-h-[72px] p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                    isToday 
-                      ? 'border-[#2563EB] bg-blue-50/50 shadow-xs ring-1 ring-[#2563EB]' 
+                    isToday
+                      ? 'border-[#2563EB] bg-blue-50/50 shadow-xs ring-1 ring-[#2563EB]'
                       : 'border-[#E8EDF4] hover:bg-slate-50'
                   }`}
                 >
@@ -469,7 +516,7 @@ export const AppointmentCalendarView: React.FC = () => {
                 <CalendarIcon className="w-4 h-4 text-[#2563EB]" />
                 {isEditingSelected ? 'Modifier Rendez-vous' : 'Détails du Rendez-vous'}
               </h2>
-              <button 
+              <button
                 onClick={() => setSelectedApt(null)}
                 className="p-1 hover:bg-slate-100 rounded-lg text-slate-400"
               >
@@ -534,7 +581,7 @@ export const AppointmentCalendarView: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-sm text-[#14213D]">{selectedApt.patientName}</span>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      selectedApt.status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-700' : 
+                      selectedApt.status === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-700' :
                       selectedApt.status === 'CANCELLED' ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700'
                     }`}>
                       {selectedApt.status}
@@ -557,18 +604,16 @@ export const AppointmentCalendarView: React.FC = () => {
                     <span>{selectedApt.patientEmail}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span className="text-emerald-700 font-semibold">Synchronisé Google Calendar & Rappel SMS planifié</span>
+                    <ShieldCheck className={`w-3.5 h-3.5 ${selectedApt.googleCalendarSynced ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <span className={selectedApt.googleCalendarSynced ? 'text-emerald-700 font-semibold' : 'text-slate-500'}>
+                      {selectedApt.googleCalendarSynced ? 'Synchronisé avec Google Calendar' : 'Agenda interne uniquement'}
+                      {selectedApt.reminderSent24h ? ' • Rappel envoyé' : ' • Rappel e-mail la veille à 08h00'}
+                    </span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                  <button
-                    onClick={() => handleDeleteApt(selectedApt.id)}
-                    className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg flex items-center gap-1 font-semibold text-[11px]"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Supprimer
-                  </button>
+                  <span className="text-[11px] text-slate-400">{selectedApt.practitionerName}</span>
 
                   <div className="flex items-center gap-2">
                     {selectedApt.status !== 'CANCELLED' && (

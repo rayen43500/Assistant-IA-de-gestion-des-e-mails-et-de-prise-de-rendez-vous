@@ -14,6 +14,7 @@ import {
   Settings
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
+import { SERVER_LABEL } from '../../services/apiClient';
 
 interface AppTopHeaderProps {
   onOpenQuickAppointment: () => void;
@@ -30,7 +31,7 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({
   onOpenSettings,
   onLogout
 }) => {
-  const { sector, organizationName, language, setLanguage, emails, showToast, currentUser, logout, isAuthenticated } = useAppStore();
+  const { sector, organizationName, language, setLanguage, emails, showToast, currentUser, logout, isAuthenticated, isBackendConnected } = useAppStore();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -64,8 +65,8 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Backend Endpoint Indicator (Hidden on small screens) */}
         <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-700">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="font-mono text-emerald-600 font-bold">localhost:5000 (Local)</span>
+<span className={`w-2 h-2 rounded-full ${isBackendConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+          <span className={`font-mono font-bold ${isBackendConnected ? 'text-emerald-600' : 'text-rose-600'}`}>{isBackendConnected ? SERVER_LABEL : 'Serveur injoignable'}</span>
         </div>
 
         {/* Quick Create Appointment CTA */}
@@ -150,9 +151,9 @@ export const AppTopHeader: React.FC<AppTopHeaderProps> = ({
             className="flex items-center gap-2 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-[#F7F9FC] border border-[#E5EAF2] hover:bg-slate-100 transition-all text-xs font-bold text-slate-800"
           >
             <div className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
-              {currentUser?.name?.charAt(0) || 'U'}
+              {(currentUser?.name || 'U').replace(/^(Dr.?|Me.?|Pr.?)s+/i, '').charAt(0).toUpperCase()}
             </div>
-            <span className="hidden md:inline max-w-[120px] truncate">{currentUser?.name?.split(' ')[0] || 'Mon Compte'}</span>
+            <span className="hidden md:inline max-w-[120px] truncate">{(currentUser?.name || 'Mon compte').split(' ').slice(0, 2).join(' ')}</span>
           </button>
 
           {showUserMenu && (

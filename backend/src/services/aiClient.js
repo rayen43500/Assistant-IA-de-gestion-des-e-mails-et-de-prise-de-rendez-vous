@@ -8,7 +8,7 @@ export const classifyEmailContent = async (emailData) => {
       subject: emailData.subject,
       body: emailData.body,
       clinicType: emailData.clinicType || 'MEDICAL',
-    }, { timeout: 10000 });
+    }, { timeout: Number(process.env.AI_SERVICE_TIMEOUT_MS) || 5000 });
     return response.data;
   } catch (error) {
     console.warn(`[AI-Service] Classification indisponible, utilisation du mode de secours : ${error.message}`);
@@ -28,7 +28,7 @@ export const queryKnowledgeRAG = async (query, clinicId) => {
     const response = await axios.post(`${AI_SERVICE_URL}/api/ai/rag-query`, {
       query,
       clinicId: clinicId.toString(),
-    }, { timeout: 10000 });
+    }, { timeout: Number(process.env.AI_SERVICE_TIMEOUT_MS) || 5000 });
     return response.data;
   } catch (error) {
     console.warn(`[AI-Service] RAG indisponible : ${error.message}`);
@@ -64,7 +64,7 @@ export const analyzeEmailStructured = async ({
       doctor_context: doctorContext,
       available_slots: availableSlots,
       practice_name: practiceName
-    }, { timeout: 10000 });
+    }, { timeout: Number(process.env.AI_SERVICE_TIMEOUT_MS) || 5000 });
     return response.data;
   } catch (error) {
     console.warn(`[AI-Service] /analyze-email indisponible, bascule sur classifyEmailContent: ${error.message}`);

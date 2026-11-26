@@ -1,4 +1,5 @@
 import express from 'express';
+import { internalOnly } from '../middleware/internalOnly.js';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import fs from 'fs';
@@ -10,6 +11,14 @@ import Appointment from '../models/Appointment.js';
 import Email from '../models/Email.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { encryptData, decryptData } from '../services/cryptoService.js';
+import {
+  GOOGLE_SCOPES,
+  getGoogleClientCredentials,
+  storeGmailTokens,
+  clearGmailTokens,
+  hasStoredGmailTokens,
+} from '../services/googleAuthService.js';
+import { getPollingStatus, pollGmailOnce } from '../services/gmailPollingService.js';
 
 const router = express.Router();
 
@@ -22,19 +31,7 @@ const readLocalIntegrationsConfig = () => {
       return JSON.parse(fs.readFileSync(CONFIG_FILE_PATH, 'utf8'));
     }
   } catch {}
-  return {
-    googleWorkspace: {
-      clientId: '531458977181-vmvhvudmd4njd9brog0sjk301cs8168s.apps.googleusercontent.com',
-      redirectUri: 'http://localhost:5000/api/integrations/google/callback',
-      gmailEnabled: true,
-      calendarEnabled: true,
-      isConfigured: true,
-      hasSecret: true,
-      doctorEmail: 'rayen.9b7@gmail.com',
-      doctorName: 'Dr. Rayen B.',
-      connectionStatus: 'CONNECTED'
-    }
-  };
+  return { googleWorkspace: {} };
 };
 
 const writeLocalIntegrationsConfig = (partial) => {
@@ -69,7 +66,7 @@ setInterval(() => {
       oauthStateCache.delete(state);
     }
   }
-}, 300000);
+}, 300000).unref();
 
 /**
  * GET /api/integrations/google/config
@@ -114,11 +111,10 @@ router.post('/google/config', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_AD
         gmailEnabled: gmailEnabled !== false,
         calendarEnabled: calendarEnabled !== false,
         isConfigured: true,
-        hasSecret: true,
+        hasSecret: Boolean(clientSecret?.trim() || fileCfg.googleWorkspace?.encryptedClientSecret || process.env.GOOGLE_CLIENT_SECRET),
+        ...(clientSecret?.trim() ? { encryptedClientSecret: encryptData(clientSecret.trim()) } : {}),
         doctorEmail: activeDocEmail,
-        doctorName: 'Dr. Rayen B.',
-        connectionStatus: 'CONNECTED',
-        lastSyncAt: "À l'instant"
+        connectionStatus: hasStoredGmailTokens() ? 'CONNECTED' : 'CONFIGURED',
       }
     });
 
@@ -138,12 +134,6 @@ router.post('/google/config', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_AD
             isConfigured: true
           };
           await clinic.save();
-        }
-
-        let doctor = await Doctor.findOne();
-        if (doctor) {
-          doctor.professionalEmail = activeDocEmail;
-          await doctor.save();
         }
       } catch (dbErr) {
         console.warn('DB différée :', dbErr.message);
@@ -307,27 +297,33 @@ router.get('/doctors', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), 
  */
 router.get('/google/connect', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
-    const fileCfg = readLocalIntegrationsConfig();
-    const googleCfg = fileCfg.googleWorkspace || {};
-    const clientId = googleCfg.clientId || process.env.GOOGLE_CLIENT_ID || '531458977181-vmvhvudmd4njd9brog0sjk301cs8168s.apps.googleusercontent.com';
-    const redirectUri = googleCfg.redirectUri || process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/integrations/google/callback`;
+    const { clientId, clientSecret, redirectUri } = getGoogleClientCredentials(req);
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        message: 'Client ID / Client Secret Google manquants. Renseignez-les dans Paramètres > Intégrations (ou GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET dans backend/.env).',
+      });
+    }
+
+    let tenantId = null;
+    let doctorId = null;
+    if (mongoose.connection.readyState === 1) {
+      const doctor = (mongoose.isValidObjectId(String(req.user?._id || '')) && await Doctor.findOne({ userId: req.user._id }).lean().catch(() => null))
+        || await Doctor.findOne({ status: 'ACTIVE' }).lean().catch(() => null);
+      tenantId = doctor?.tenantId || (await Clinic.findOne().lean().catch(() => null))?._id || null;
+      doctorId = doctor?._id || null;
+    }
 
     // Générer un jeton d'état CSRF cryptographique à usage unique
     const stateToken = crypto.randomBytes(32).toString('hex');
     oauthStateCache.set(stateToken, {
-      tenantId: '66f1234567890abcdef12345',
-      doctorId: 'doc-rayen',
-      userId: String(req.user?._id || '66f1234567890abcdef12346'),
+      tenantId,
+      doctorId,
+      userId: String(req.user?._id || ''),
+      redirectUri,
       createdAt: Date.now(),
     });
 
-    const scopes = [
-      'https://www.googleapis.com/auth/userinfo.email',
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/calendar.events',
-      'https://www.googleapis.com/auth/calendar.freebusy',
-    ].join(' ');
+    const scopes = GOOGLE_SCOPES.join(' ');
 
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${encodeURIComponent(clientId)}&` +
@@ -341,7 +337,8 @@ router.get('/google/connect', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_AD
     return res.json({
       authUrl,
       url: authUrl,
-      doctorId: 'doc-rayen',
+      doctorId,
+      redirectUri,
       scopes: scopes.split(' '),
     });
   } catch (error) {
@@ -359,33 +356,26 @@ router.post('/google/direct-connect', protect, authorize('PRATICIEN', 'ADMIN', '
     const fileCfg = readLocalIntegrationsConfig();
     const doctorEmail = (email || fileCfg.googleWorkspace?.doctorEmail || 'rayen.9b7@gmail.com').trim().toLowerCase();
 
-    // Persistance fichier garantie
+    // Enregistre l'adresse de la boîte centrale. La connexion réelle (lecture + envoi)
+    // nécessite le consentement OAuth : GET /api/integrations/google/connect
     writeLocalIntegrationsConfig({
       googleWorkspace: {
         ...(fileCfg.googleWorkspace || {}),
         doctorEmail,
-        doctorName: 'Dr. Rayen B.',
-        connectionStatus: 'CONNECTED',
         isConfigured: true,
-        lastSyncAt: "À l'instant"
+        connectionStatus: hasStoredGmailTokens() ? 'CONNECTED' : 'CONFIGURED',
       }
     });
 
-    if (mongoose.connection.readyState === 1) {
-      try {
-        let doctor = await Doctor.findOne();
-        if (doctor) {
-          doctor.professionalEmail = doctorEmail;
-          await doctor.save();
-        }
-      } catch (dbErr) {}
-    }
-
+    const connected = hasStoredGmailTokens();
     return res.json({
       success: true,
-      message: `Compte Google Workspace connecté avec succès pour ${doctorEmail}`,
+      message: connected
+        ? `Boîte centrale ${doctorEmail} connectée (lecture et envoi Gmail actifs).`
+        : `Adresse ${doctorEmail} enregistrée. Finalisez l'autorisation Google OAuth pour activer la lecture et l'envoi des e-mails.`,
       doctorEmail,
-      connectionStatus: 'CONNECTED'
+      connectionStatus: connected ? 'CONNECTED' : 'CONFIGURED',
+      requiresOAuth: !connected,
     });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la connexion Google directe', error: error.message });
@@ -494,18 +484,9 @@ router.get('/google/callback', async (req, res) => {
   const { tenantId, doctorId } = stateMeta;
 
   try {
-    const clinic = await Clinic.findById(tenantId);
-    const googleCfg = clinic?.integrationsConfig?.googleWorkspace;
-    const clientId = googleCfg?.clientId || process.env.GOOGLE_CLIENT_ID;
-    let clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    if (googleCfg?.encryptedClientSecret) {
-      try {
-        clientSecret = decryptData(googleCfg.encryptedClientSecret);
-      } catch (e) {
-        console.warn('Erreur déchiffrement client secret Google:', e.message);
-      }
-    }
-    const redirectUri = googleCfg?.redirectUri || process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/integrations/google/callback`;
+    const creds = getGoogleClientCredentials(req);
+    const { clientId, clientSecret } = creds;
+    const redirectUri = stateMeta.redirectUri || creds.redirectUri;
 
     // Échanger le code contre les tokens auprès de Google
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -548,23 +529,17 @@ router.get('/google/callback', async (req, res) => {
 
     const encryptedCredentials = encryptData(credentialsToEncrypt);
 
-    // ✅ Sauvegarde garantie dans le fichier JSON (sans MongoDB)
-    writeLocalIntegrationsConfig({
-      googleWorkspace: {
-        ...(readLocalIntegrationsConfig().googleWorkspace || {}),
-        doctorEmail: googleAccountEmail,
-        connectionStatus: 'CONNECTED',
-        isConfigured: true,
-        hasSecret: true,
-        lastSyncAt: new Date().toISOString(),
-        // Tokens chiffrés stockés en fichier
-        encryptedTokens: encryptedCredentials,
-        tokenExpiry: Date.now() + (tokenData.expires_in * 1000),
-      }
+    // ✅ Boîte centrale : jetons chiffrés en fichier (lecture + envoi Gmail, sans dépendre de MongoDB)
+    storeGmailTokens({
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token,
+      expiresIn: tokenData.expires_in,
+      scope: tokenData.scope,
+      accountEmail: googleAccountEmail,
     });
 
-    // Essayer aussi MongoDB si disponible (optionnel)
-    if (mongoose.connection.readyState === 1) {
+    // Intégration agenda du praticien (FreeBusy / événements) si identifiable
+    if (mongoose.connection.readyState === 1 && tenantId && doctorId) {
       try {
         await Integration.findOneAndUpdate(
           { tenantId, doctorId, provider: 'GOOGLE' },
@@ -603,23 +578,22 @@ router.get('/google/status', protect, async (req, res) => {
   try {
     const fileCfg = readLocalIntegrationsConfig();
     const googleCfg = fileCfg.googleWorkspace || {};
-    const activeEmail = googleCfg.doctorEmail || 'rayen.9b7@gmail.com';
-    const isConn = googleCfg.connectionStatus === 'CONNECTED' || googleCfg.isConfigured !== false;
+    const activeEmail = googleCfg.doctorEmail || '';
+    const isConn = Boolean(googleCfg.encryptedTokens) && googleCfg.connectionStatus === 'CONNECTED';
+    const { clientId, clientSecret } = getGoogleClientCredentials(req);
 
     return res.json({
       connected: isConn,
+      configured: Boolean(clientId && clientSecret),
       email: activeEmail,
       providerAccountEmail: activeEmail,
-      status: isConn ? 'CONNECTED' : 'DISCONNECTED',
-      scopes: [
-        'https://www.googleapis.com/auth/userinfo.email',
-        'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/calendar'
-      ],
+      status: isConn ? 'CONNECTED' : (googleCfg.connectionStatus === 'REVOKED' ? 'REVOKED' : 'DISCONNECTED'),
+      scopes: googleCfg.grantedScopes || [],
+      canSendEmails: isConn && (googleCfg.grantedScopes || []).some(s => s.includes('gmail.send')),
       calendarId: 'primary',
-      lastSynchronization: new Date(),
-      tokenExpiration: new Date(Date.now() + 86400000 * 30),
+      lastSynchronization: googleCfg.lastSyncAt || null,
+      tokenExpiration: googleCfg.tokenExpiry ? new Date(googleCfg.tokenExpiry) : null,
+      polling: getPollingStatus(),
     });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la récupération du statut', error: error.message });
@@ -632,14 +606,7 @@ router.get('/google/status', protect, async (req, res) => {
  */
 router.delete('/google/disconnect', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
   try {
-    const fileCfg = readLocalIntegrationsConfig();
-    writeLocalIntegrationsConfig({
-      googleWorkspace: {
-        ...(fileCfg.googleWorkspace || {}),
-        connectionStatus: 'DISCONNECTED',
-        isConfigured: false
-      }
-    });
+    clearGmailTokens();
 
     if (mongoose.connection.readyState === 1) {
       try {
@@ -660,6 +627,40 @@ router.delete('/google/disconnect', protect, authorize('PRATICIEN', 'ADMIN', 'SU
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la déconnexion Google', error: error.message });
   }
+});
+
+/**
+ * Mode de réponse automatique :
+ *  - auto : confirmations, demandes de précision et propositions de créneaux envoyées automatiquement
+ *  - hitl : toutes les réponses restent en brouillon jusqu'à validation humaine
+ */
+router.get('/ai-settings', protect, async (req, res) => {
+  const cfg = readLocalIntegrationsConfig();
+  const envForced = process.env.AUTO_REPLY_MODE === 'hitl';
+  res.json({ autoReplyMode: envForced ? 'hitl' : (cfg.autoReplyMode || 'auto'), lockedByServer: envForced });
+});
+
+router.put('/ai-settings', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  const mode = req.body?.autoReplyMode;
+  if (!['auto', 'hitl'].includes(mode)) return res.status(400).json({ message: 'Mode invalide (auto ou hitl).' });
+  writeLocalIntegrationsConfig({ autoReplyMode: mode });
+  res.json({ autoReplyMode: mode, lockedByServer: process.env.AUTO_REPLY_MODE === 'hitl' });
+});
+
+/**
+ * POST /api/integrations/google/poll-now
+ * Force un cycle de lecture de la boîte Gmail centrale (test / démonstration)
+ */
+router.post('/google/poll-now', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  const result = await pollGmailOnce();
+  res.json({ ...result, polling: getPollingStatus() });
+});
+
+/**
+ * GET /api/integrations/google/polling-status
+ */
+router.get('/google/polling-status', protect, async (req, res) => {
+  res.json(getPollingStatus());
 });
 
 /**
@@ -793,7 +794,7 @@ router.delete('/whatsapp/disconnect', protect, authorize('PRATICIEN', 'ADMIN', '
  * POST /api/integrations/whatsapp/send-notification
  * Point d'envoi unifié pour les notifications WhatsApp et alertes SMS des workflows n8n
  */
-router.post('/whatsapp/send-notification', async (req, res) => {
+router.post('/whatsapp/send-notification', internalOnly, async (req, res) => {
   try {
     const { recipient, message, template, type } = req.body || {};
     const fileCfg = readLocalIntegrationsConfig();

@@ -174,7 +174,7 @@ export const PatientPortalLayout: React.FC<PatientPortalLayoutProps> = ({ onExit
                 <div className="overflow-hidden">
                   <div className="text-xs font-bold text-[#14213D] truncate">{currentUser?.name || 'Patient'}</div>
                   <div className="text-[10px] text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                    <span className="text-[#2563EB] font-bold">Patient vérifié</span>
+                    <span className="text-[#2563EB] font-bold">{currentUser?.id ? 'Compte patient' : 'Sans compte'}</span>
                   </div>
                 </div>
               </div>
@@ -339,6 +339,7 @@ export const PatientPortalLayout: React.FC<PatientPortalLayoutProps> = ({ onExit
 
       {/* Interactive 5-Step Booking Modal */}
       <PatientBookingModal
+        key={isBookingOpen ? `open-${doctorForBooking?.id || "any"}` : "closed"}
         isOpen={isBookingOpen}
         onClose={() => setIsBookingOpen(false)}
         preselectedDoctor={doctorForBooking}

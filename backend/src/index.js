@@ -16,6 +16,9 @@ import aiRoutes from './routes/ai.js';
 import integrationsRoutes from './routes/integrations.js';
 import emailRoutingRoutes from './routes/emailRouting.js';
 import publicBookingRoutes from './routes/publicBooking.js';
+import contactsRoutes from './routes/contacts.js';
+import scheduleRoutes from './routes/schedule.js';
+import adminRoutes from './routes/admin.js';
 import { seedInitialData } from './config/seed.js';
 import { startGmailPolling } from './services/gmailPollingService.js';
 
@@ -36,11 +39,17 @@ const httpRequestCounter = new client.Counter({
 
 // Middleware DevSecOps & Sécurité
 app.use(helmet());
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(o => o.trim());
 app.use(cors({
-  origin: '*', // Adaptable selon le frontend en production
+  origin: (origin, cb) => {
+    // Requêtes serveur à serveur (n8n, curl) : pas d'en-tête Origin
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(null, false);
+  },
   credentials: true,
 }));
-app.use(express.json());
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
 
 // Rate Limiting (Protection contre attaques brute-force / DoS)
@@ -74,6 +83,9 @@ app.use('/api/clinics', clinicRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/integrations', integrationsRoutes);
 app.use('/api/public', publicBookingRoutes);
+app.use('/api/contacts', contactsRoutes);
+app.use('/api/schedule', scheduleRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Route racine d'accueil API
 app.get('/', (req, res) => {

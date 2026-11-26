@@ -2,12 +2,14 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Clinic from '../models/Clinic.js';
-import { protect } from '../middleware/auth.js';
+import Doctor from '../models/Doctor.js';
+import InternalSchedule from '../models/InternalSchedule.js';
+import { protect, JWT_SECRET } from '../middleware/auth.js';
 
 const router = express.Router();
 
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'super_secret_jwt_key_cabinet_ai_2026', {
+  return jwt.sign({ id }, JWT_SECRET, {
     expiresIn: '7d',
   });
 };
@@ -15,36 +17,52 @@ const generateToken = (id) => {
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role, clinicName, clinicType } = req.body;
+    const { name, email, password, role, clinicName, clinicType } = req.body || {};
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Nom, e-mail et mot de passe sont obligatoires.' });
+    }
+    if (String(password).length < 8) {
+      return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 8 caractères.' });
+    }
+    // Inscription publique : seuls les rôles praticien et patient sont autorisés
+    const safeRole = role === 'PATIENT' ? 'PATIENT' : 'PRATICIEN';
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: String(email).toLowerCase().trim() });
     if (existingUser) {
       return res.status(400).json({ message: 'Cet e-mail est déjà utilisé' });
     }
 
-    let clinic;
-    if (clinicName) {
-      clinic = await Clinic.create({
-        name: clinicName,
-        type: clinicType || 'MEDICAL',
+    // Un praticien qui s'inscrit crée toujours son propre cabinet (jamais de rattachement
+    // à un cabinet existant). Un patient est rattaché au cabinet public : il n'a accès
+    // qu'à ses propres rendez-vous (voir practitionerScope).
+    const clinic = safeRole === 'PATIENT'
+      ? (await Clinic.findOne().sort({ createdAt: 1 })) || await Clinic.create({ name: 'Cabinet', type: 'MEDICAL' })
+      : await Clinic.create({
+        name: String(clinicName || `Cabinet de ${name}`).trim().slice(0, 150),
+        type: clinicType === 'LEGAL' ? 'LEGAL' : 'MEDICAL',
       });
-    } else {
-      clinic = await Clinic.findOne();
-      if (!clinic) {
-        clinic = await Clinic.create({
-          name: 'Cabinet Médical Pilote Tunis',
-          type: 'MEDICAL',
-        });
-      }
-    }
 
     const user = await User.create({
-      name,
-      email,
+      name: String(name).trim(),
+      email: String(email).toLowerCase().trim(),
       password,
-      role: role || 'PRATICIEN',
+      role: safeRole,
       clinicId: clinic._id,
     });
+
+    // Praticien : fiche + agenda pour recevoir des rendez-vous (e-mail, portail patient)
+    if (safeRole === 'PRATICIEN') {
+      const doctor = await Doctor.create({
+        tenantId: clinic._id,
+        userId: user._id,
+        name: user.name,
+        professionalEmail: user.email,
+        profession: clinicType === 'LEGAL' ? 'AVOCAT' : 'MEDECIN',
+        specialty: clinicType === 'LEGAL' ? 'Conseil juridique' : 'Médecine Générale',
+        status: 'ACTIVE',
+      });
+      await InternalSchedule.create({ tenantId: clinic._id, doctorId: doctor._id }).catch(() => {});
+    }
 
     res.status(201).json({
       user: {
@@ -53,6 +71,7 @@ router.post('/register', async (req, res) => {
         email: user.email,
         role: user.role,
         clinicId: user.clinicId,
+        clinic: { _id: clinic._id, name: clinic.name, type: clinic.type },
       },
       token: generateToken(user._id),
     });
@@ -65,8 +84,14 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email }).populate('clinicId');
+    if (!email || !password) {
+      return res.status(400).json({ message: 'E-mail et mot de passe requis.' });
+    }
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() }).populate('clinicId');
     
+    if (user && user.status === 'INACTIVE' && (await user.matchPassword(password))) {
+      return res.status(403).json({ message: 'Ce compte est désactivé. Contactez l’administrateur.' });
+    }
     if (user && (await user.matchPassword(password))) {
       res.json({
         user: {
@@ -89,7 +114,14 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', protect, async (req, res) => {
   const user = await User.findById(req.user._id).populate('clinicId').select('-password');
-  res.json(user);
+  if (!user) return res.status(401).json({ message: 'Compte introuvable.' });
+  res.json({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    clinic: user.clinicId ? { _id: user.clinicId._id, name: user.clinicId.name, type: user.clinicId.type } : null,
+  });
 });
 
 export default router;

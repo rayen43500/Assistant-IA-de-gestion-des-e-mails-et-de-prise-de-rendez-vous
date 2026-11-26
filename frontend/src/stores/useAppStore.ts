@@ -21,14 +21,61 @@ import {
   apiCheckBackendHealth,
   apiLogin,
   apiRegister,
-  apiLogout
+  apiLogout,
+  apiGetCurrentUser,
+  apiClient,
+  apiErrorMessage,
+  DEMO_MODE,
+  AUTH_TOKEN_KEY,
+  AUTH_USER_KEY
 } from '../services/apiClient';
+
+const GUEST_USER: UserProfile = {
+  id: '',
+  name: 'Invité',
+  email: '',
+  role: 'PRATICIEN',
+  organizationName: '',
+  sector: 'MEDICAL'
+};
+
+function readStoredUser(): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(AUTH_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function toProfile(u: any): UserProfile {
+  const clinic = u.clinic || (typeof u.clinicId === 'object' ? u.clinicId : null);
+  return {
+    id: String(u.id || u._id || ''),
+    name: u.name,
+    email: u.email,
+    role: u.role || 'PRATICIEN',
+    organizationName: clinic?.name || 'Mon cabinet',
+    sector: clinic?.type === 'LEGAL' ? 'LEGAL' : 'MEDICAL'
+  };
+}
+
+function persistUser(profile: UserProfile) {
+  try { localStorage.setItem(AUTH_USER_KEY, JSON.stringify(profile)); } catch {}
+}
+
+const storedUser = readStoredUser();
+const hasToken = !!localStorage.getItem(AUTH_TOKEN_KEY);
 
 interface AppStore {
   // Backend Connection Info
   backendUrl: string;
   isBackendConnected: boolean;
   checkConnection: () => Promise<void>;
+  restoreSession: () => Promise<boolean>;
+  loadAllData: () => Promise<void>;
+  loadContacts: () => Promise<void>;
+  dataLoaded: boolean;
 
   // Sector & Organization
   sector: SectorType;
@@ -50,22 +97,22 @@ interface AppStore {
   emails: EmailItem[];
   setEmails: (emails: EmailItem[]) => void;
   loadEmails: () => Promise<void>;
-  updateEmailStatus: (id: string, status: EmailItem['status'], draftReply?: string) => Promise<void>;
+  updateEmailStatus: (id: string, status: EmailItem['status'], draftReply?: string) => Promise<boolean>;
   addEmail: (email: EmailItem) => void;
   ingestNewEmail: (emailPayload: { sender: { name: string; email: string; phone?: string }; subject: string; body: string }) => Promise<void>;
 
   appointments: AppointmentItem[];
   loadAppointments: () => Promise<void>;
-  addAppointment: (apt: AppointmentItem) => Promise<void>;
+  addAppointment: (apt: AppointmentItem & { doctorId?: string }) => Promise<{ success: boolean; error?: string }>;
   updateAppointment: (id: string, updates: Partial<AppointmentItem>) => void;
   deleteAppointment: (id: string) => void;
   cancelAppointment: (id: string) => Promise<void>;
   confirmAppointment: (id: string) => void;
 
   contacts: ClientContact[];
-  addContact: (contact: ClientContact) => void;
-  updateContact: (id: string, updates: Partial<ClientContact>) => void;
-  deleteContact: (id: string) => void;
+  addContact: (contact: ClientContact) => Promise<void> | void;
+  updateContact: (id: string, updates: Partial<ClientContact>) => Promise<void>;
+  deleteContact: (id: string) => Promise<void>;
   workflows: N8nWorkflowInfo[];
 
   // Availability & Scheduling Configuration
@@ -261,9 +308,38 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  sector: 'MEDICAL',
+  dataLoaded: false,
+
+  // Vérifie le jeton enregistré auprès du serveur et recharge le profil réel
+  restoreSession: async () => {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) return false;
+    try {
+      const me = await apiGetCurrentUser();
+      const profile = toProfile(me);
+      persistUser(profile);
+      set({ isAuthenticated: true, currentUser: profile, sector: profile.sector, organizationName: profile.organizationName, isBackendConnected: true });
+      return true;
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(AUTH_USER_KEY);
+        set({ isAuthenticated: false, currentUser: GUEST_USER });
+        return false;
+      }
+      // Serveur momentanément injoignable : on garde la session locale
+      return !!readStoredUser();
+    }
+  },
+
+  loadAllData: async () => {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) return;
+    await Promise.all([get().loadEmails(), get().loadAppointments(), get().loadContacts()]);
+    set({ dataLoaded: true });
+  },
+
+  sector: storedUser?.sector || 'MEDICAL',
   setSector: (sector) => set({ sector }),
-  organizationName: 'Cabinet Médical Dr. Ben Salem',
+  organizationName: storedUser?.organizationName || '',
   setOrganizationName: (organizationName) => set({ organizationName }),
   language: 'fr',
   setLanguage: (language) => {
@@ -271,31 +347,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ language });
   },
 
-  isAuthenticated: !!localStorage.getItem('medilaw_jwt_token'),
+  isAuthenticated: hasToken && !!storedUser,
 
-  currentUser: {
-    id: 'u-1',
-    name: 'Dr. Youssef Ben Salem',
-    email: 'dr.bensalem@cabinet-ai.tn',
-    role: 'PRATICIEN',
-    organizationName: 'Cabinet Médical Dr. Ben Salem',
-    sector: 'MEDICAL'
-  },
+  currentUser: storedUser || GUEST_USER,
   setCurrentUser: (currentUser) => set({ currentUser }),
 
   login: async (credentials) => {
     try {
       const data = await apiLogin(credentials);
-      if (data && data.user) {
-        const u = data.user;
-        const profile: UserProfile = {
-          id: u.id || u._id || 'u-1',
-          name: u.name,
-          email: u.email,
-          role: u.role || 'PRATICIEN',
-          organizationName: u.clinic?.name || 'Cabinet Médical / Juridique',
-          sector: u.clinic?.type === 'LEGAL' ? 'LEGAL' : 'MEDICAL'
-        };
+      if (data && data.user && data.token) {
+        const profile = toProfile(data.user);
+        persistUser(profile);
         set({
           isAuthenticated: true,
           currentUser: profile,
@@ -303,76 +365,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
           organizationName: profile.organizationName,
           isBackendConnected: true
         });
+        get().loadAllData();
         return { success: true };
       }
       return { success: false, error: 'Réponse invalide du serveur' };
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Échec de connexion';
-      // Mode secours démo si le backend Render est en démarrage à froid
-      if (credentials.email && credentials.password) {
-        const isSuperAdmin = credentials.email.toLowerCase().includes('admin');
-        const isPatient = credentials.email.toLowerCase().includes('patient') || credentials.email.toLowerCase().includes('jaziri');
-        const isLegal = credentials.email.toLowerCase().includes('avocat') || credentials.email.toLowerCase().includes('selim');
-        
-        let demoUser: UserProfile;
-        if (isSuperAdmin) {
-          let adminName = 'Amine Mansour';
-          if (credentials.email.toLowerCase().includes('sarra')) adminName = 'Sarra Kallel';
-          else if (credentials.email.toLowerCase().includes('hedi')) adminName = 'Hedi Bouzid';
-
-          demoUser = {
-            id: 'admin-super-1',
-            name: adminName,
-            email: credentials.email,
-            role: 'SUPER_ADMIN',
-            organizationName: 'MediLawAI Platform Inc.',
-            sector: 'MEDICAL'
-          };
-        } else if (isPatient) {
-          demoUser = {
-            id: 'patient-1',
-            name: 'Amine Jaziri',
-            email: credentials.email,
-            role: 'PATIENT',
-            organizationName: 'Espace Patient Amine',
-            sector: 'MEDICAL'
-          };
-        } else {
-          demoUser = {
-            id: `demo-${Date.now()}`,
-            name: isLegal ? 'Me. Selim Trabelsi' : 'Dr. Youssef Ben Salem',
-            email: credentials.email,
-            role: 'PRATICIEN',
-            organizationName: isLegal ? 'Cabinet d’Avocats Trabelsi & Associés' : 'Cabinet Médical Dr. Ben Salem',
-            sector: isLegal ? 'LEGAL' : 'MEDICAL'
-          };
-        }
-        localStorage.setItem('medilaw_jwt_token', 'demo_session_token_2026');
-        set({
-          isAuthenticated: true,
-          currentUser: demoUser,
-          sector: demoUser.sector,
-          organizationName: demoUser.organizationName
-        });
-        return { success: true, error: 'Session ouverte en mode sécurisé local (serveur distant en veille).' };
+      // Mode démonstration explicite uniquement (VITE_DEMO_MODE=true) ET serveur injoignable
+      if (DEMO_MODE && !err.response) {
+        const email = (credentials.email || '').toLowerCase();
+        const role: UserProfile['role'] = email.includes('admin') ? 'SUPER_ADMIN' : email.includes('patient') ? 'PATIENT' : 'PRATICIEN';
+        const demoUser: UserProfile = { id: 'demo', name: 'Compte démo', email: credentials.email, role, organizationName: 'Cabinet de démonstration', sector: 'MEDICAL' };
+        localStorage.setItem(AUTH_TOKEN_KEY, 'demo_session_token_2026');
+        persistUser(demoUser);
+        set({ isAuthenticated: true, currentUser: demoUser, sector: 'MEDICAL', organizationName: demoUser.organizationName });
+        return { success: true, error: 'Mode démonstration (serveur injoignable).' };
       }
-      return { success: false, error: msg };
+      return { success: false, error: apiErrorMessage(err, 'E-mail ou mot de passe incorrect.') };
     }
   },
 
   register: async (userData) => {
     try {
       const data = await apiRegister(userData);
-      if (data && data.user) {
-        const u = data.user;
-        const profile: UserProfile = {
-          id: u.id || u._id || 'u-new',
-          name: u.name,
-          email: u.email,
-          role: u.role || 'PRATICIEN',
-          organizationName: userData.clinicName || 'Nouveau Cabinet',
-          sector: userData.clinicType || 'MEDICAL'
-        };
+      if (data && data.user && data.token) {
+        const profile = toProfile(data.user);
+        profile.organizationName = data.user.clinic?.name || userData.clinicName || profile.organizationName;
+        profile.sector = (data.user.clinic?.type || userData.clinicType) === 'LEGAL' ? 'LEGAL' : 'MEDICAL';
+        persistUser(profile);
         set({
           isAuthenticated: true,
           currentUser: profile,
@@ -380,54 +399,36 @@ export const useAppStore = create<AppStore>((set, get) => ({
           organizationName: profile.organizationName,
           isBackendConnected: true
         });
+        get().loadAllData();
         return { success: true };
       }
       return { success: false, error: 'Erreur lors de la création du compte' };
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Erreur lors de l’inscription';
-      // Inscription locale si le backend est temporairement inaccessible
-      const demoUser: UserProfile = {
-        id: `reg-${Date.now()}`,
-        name: userData.name,
-        email: userData.email,
-        role: (userData.role as any) || 'PRATICIEN',
-        organizationName: userData.clinicName || 'Cabinet Professionnel',
-        sector: userData.clinicType || 'MEDICAL'
-      };
-      localStorage.setItem('medilaw_jwt_token', 'demo_registered_token_2026');
-      set({
-        isAuthenticated: true,
-        currentUser: demoUser,
-        sector: demoUser.sector,
-        organizationName: demoUser.organizationName
-      });
-      return { success: true, error: 'Compte initialisé avec succès (synchronisation en cours).' };
+      return { success: false, error: apiErrorMessage(err, 'Erreur lors de l’inscription.') };
     }
   },
 
   logout: () => {
     apiLogout();
-    localStorage.removeItem('medilaw_jwt_token');
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
     set({
       isAuthenticated: false,
-      currentUser: {
-        id: 'u-1',
-        name: 'Dr. Youssef Ben Salem',
-        email: 'dr.bensalem@cabinet-ai.tn',
-        role: 'PRATICIEN',
-        organizationName: 'Cabinet Médical Dr. Ben Salem',
-        sector: 'MEDICAL'
-      }
+      currentUser: GUEST_USER,
+      dataLoaded: false,
+      emails: DEMO_MODE ? initialEmails : [],
+      appointments: DEMO_MODE ? initialAppointments : []
     });
   },
 
-  emails: initialEmails,
+  emails: DEMO_MODE ? initialEmails : [],
   setEmails: (emails) => set({ emails }),
 
   loadEmails: async () => {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) return;
     try {
       const data = await apiFetchEmails();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data) && (data.length > 0 || !DEMO_MODE)) {
         set({ emails: data, isBackendConnected: true });
       }
     } catch (err: any) {
@@ -448,8 +449,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
         sendNow: status === 'VALIDATED_AND_SENT'
       });
       set({ isBackendConnected: true });
+      if (!DEMO_MODE) await get().loadEmails();
+      return true;
     } catch (err: any) {
-      console.warn('[Store] Validation locale confirmée (API Backend en veille) :', err.message);
+      // L'envoi a échoué (ex : Gmail non connecté) : on remet l'e-mail en attente et on prévient
+      set((state) => ({
+        emails: state.emails.map((e) => e.id === id ? { ...e, status: 'PENDING_VALIDATION' } : e)
+      }));
+      get().showToast({ title: 'Réponse non envoyée', message: apiErrorMessage(err), type: 'danger' });
+      if (!DEMO_MODE) await get().loadEmails();
+      return false;
     }
   },
 
@@ -463,7 +472,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         return;
       }
     } catch (err: any) {
-      console.warn('[Store] Ingestion via mode secouru local :', err.message);
+      if (!DEMO_MODE) {
+        get().showToast({ title: 'Analyse impossible', message: apiErrorMessage(err), type: 'danger' });
+        return;
+      }
     }
 
     // Fallback simulation locale si le serveur distant est en veille
@@ -500,12 +512,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((state) => ({ emails: [fallbackEmail, ...state.emails] }));
   },
 
-  appointments: initialAppointments,
+  appointments: DEMO_MODE ? initialAppointments : [],
 
   loadAppointments: async () => {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) return;
     try {
       const data = await apiFetchAppointments();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data) && (data.length > 0 || !DEMO_MODE)) {
         set({ appointments: data, isBackendConnected: true });
       }
     } catch (err: any) {
@@ -514,21 +527,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   addAppointment: async (apt) => {
-    // 1. Optimistic update
-    set((state) => ({ appointments: [...state.appointments, apt] }));
-
-    // 2. Appel API Backend réel
+    if (DEMO_MODE && !localStorage.getItem(AUTH_TOKEN_KEY)?.startsWith('ey')) {
+      set((state) => ({ appointments: [...state.appointments, apt] }));
+      return { success: true };
+    }
     try {
       await apiCreateAppointment({
         patient: { name: apt.patientName, email: apt.patientEmail, phone: apt.patientPhone },
         reason: apt.serviceName,
         date: apt.date,
         timeSlot: { start: apt.timeStart, end: apt.timeEnd },
-        source: 'MANUAL_CABINET'
+        source: 'MANUAL_CABINET',
+        ...((apt as any).doctorId ? { doctorId: (apt as any).doctorId } : {})
       } as any);
+      await get().loadAppointments();
       set({ isBackendConnected: true });
+      return { success: true };
     } catch (err: any) {
-      console.warn('[Store] RDV sauvegardé localement (Serveur distant en veille) :', err.message);
+      const message = apiErrorMessage(err, 'Impossible de créer le rendez-vous.');
+      get().showToast({ title: 'Rendez-vous non enregistré', message, type: 'danger' });
+      return { success: false, error: message };
     }
   },
 
@@ -540,7 +558,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       await apiCancelAppointment(id);
     } catch (err: any) {
-      console.warn('[Store] Annulation enregistrée localement :', err.message);
+      if (!DEMO_MODE) {
+        get().showToast({ title: 'Annulation impossible', message: apiErrorMessage(err), type: 'danger' });
+        await get().loadAppointments();
+      }
     }
   },
 
@@ -556,14 +577,55 @@ export const useAppStore = create<AppStore>((set, get) => ({
     appointments: state.appointments.filter((a) => a.id !== id)
   })),
 
-  contacts: initialContacts,
-  addContact: (contact) => set((state) => ({ contacts: [contact, ...state.contacts] })),
-  updateContact: (id, updates) => set((state) => ({
-    contacts: state.contacts.map((c) => c.id === id ? { ...c, ...updates } : c)
-  })),
-  deleteContact: (id) => set((state) => ({
-    contacts: state.contacts.filter((c) => c.id !== id)
-  })),
+  contacts: DEMO_MODE ? initialContacts : [],
+
+  loadContacts: async () => {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) return;
+    try {
+      const { data } = await apiClient.get('/api/contacts');
+      if (Array.isArray(data)) {
+        set({
+          contacts: data.map((c: any) => ({
+            ...c,
+            lastInteraction: c.lastInteraction ? new Date(c.lastInteraction).toLocaleDateString('fr-FR') : '—',
+          }))
+        });
+      }
+    } catch (err: any) {
+      if (!DEMO_MODE) console.warn('[Store] Patients indisponibles :', err.message);
+    }
+  },
+
+  addContact: async (contact) => {
+    if (DEMO_MODE) return set((state) => ({ contacts: [contact, ...state.contacts] }));
+    try {
+      await apiClient.post('/api/contacts', contact);
+      await get().loadContacts();
+    } catch (err: any) {
+      get().showToast({ title: 'Patient non enregistré', message: apiErrorMessage(err), type: 'danger' });
+    }
+  },
+  updateContact: async (id, updates) => {
+    set((state) => ({ contacts: state.contacts.map((c) => c.id === id ? { ...c, ...updates } : c) }));
+    if (DEMO_MODE) return;
+    try {
+      await apiClient.put(`/api/contacts/${encodeURIComponent(id)}`, updates);
+      await get().loadContacts();
+    } catch (err: any) {
+      get().showToast({ title: 'Modification non enregistrée', message: apiErrorMessage(err), type: 'danger' });
+      await get().loadContacts();
+    }
+  },
+  deleteContact: async (id) => {
+    set((state) => ({ contacts: state.contacts.filter((c) => c.id !== id) }));
+    if (DEMO_MODE || id.startsWith('email:')) return;
+    try {
+      await apiClient.delete(`/api/contacts/${id}`);
+      await get().loadContacts();
+    } catch (err: any) {
+      get().showToast({ title: 'Suppression impossible', message: apiErrorMessage(err), type: 'danger' });
+    }
+  },
   workflows: initialWorkflows,
 
   availabilitySettings: initialAvailabilitySettings,
@@ -580,6 +642,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
     );
     if (blockedPeriod) {
       return { available: false, reason: `Cabinet fermé : ${blockedPeriod.title}` };
+    }
+
+    // 1b. Date / heure déjà passées
+    const nowD = new Date();
+    const todayStr = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, '0')}-${String(nowD.getDate()).padStart(2, '0')}`;
+    const nowTime = `${String(nowD.getHours()).padStart(2, '0')}:${String(nowD.getMinutes()).padStart(2, '0')}`;
+    if (date < todayStr || (date === todayStr && time <= nowTime)) {
+      return { available: false, reason: 'Créneau passé.' };
     }
 
     // 2. Jour de la semaine

@@ -1,202 +1,265 @@
 {
-  "name": "1. Ingestion et Tri Automatique des E-mails Cabinet (IA + n8n)",
+  "id": "4d9McL2J7pagy5Df",
+  "name": "1. Ingestion E-mail → IA → Réservation automatique",
   "nodes": [
     {
       "parameters": {},
-      "name": "Quand on clique sur 'Tester'",
+      "name": "Test manuel",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [180, 160]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "ingest-email",
+        "responseMode": "lastNode",
         "options": {}
       },
-      "name": "Webhook Ingestion E-mail",
+      "name": "Webhook ingest-email",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
-      "position": [180, 340]
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "7b3b6a52-1d7e-4c51-9a0e-ingest000001"
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
-              "name": "sender.name",
-              "value": "={{ $json.body?.sender?.name || 'Sami Chaabane' }}"
-            },
-            {
-              "name": "sender.email",
-              "value": "={{ $json.body?.sender?.email || 'sami.chaabane@gmail.com' }}"
-            },
-            {
-              "name": "subject",
-              "value": "={{ $json.body?.subject || 'Demande de consultation cardiologie - Essoufflements' }}"
-            },
-            {
-              "name": "body",
-              "value": "={{ $json.body?.body || 'Bonjour Dr. Rayen, je ressens de légers essoufflements à l effort et souhaiterais un créneau vendredi vers 10h.' }}"
-            },
-            {
-              "name": "clinicId",
-              "value": "66f1234567890abcdef12345"
+              "id": "Normaliser l'e-mail-0",
+              "name": "email",
+              "value": "={{ $json.body?.subject ? $json.body : {\n  senderName: 'Sami Chaabane',\n  senderEmail: 'sami.chaabane@example.tn',\n  subject: 'Demande de rendez-vous',\n  body: 'Bonjour, je souhaite un rendez-vous avec le Dr Ben Salem jeudi à 10h00 pour une consultation de suivi.'\n} }}",
+              "type": "object"
             }
           ]
         },
         "options": {}
       },
-      "name": "Formater Données Patient Entrant",
+      "name": "Normaliser l'e-mail",
       "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL || 'http://localhost:5000' }}/api/emails/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-key",
+              "value": "={{ $env.INTERNAL_API_KEY || '' }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n        senderName: $json.email.senderName || $json.email.sender?.name || '',\n        senderEmail: $json.email.senderEmail || $json.email.sender?.email || $json.email.from,\n        recipient: $json.email.recipient || $json.email.to || 'contact@medilawai.com',\n        subject: $json.email.subject || '',\n        body: $json.email.body || $json.email.text || '',\n        threadId: $json.email.threadId || null,\n        rfcMessageId: $json.email.messageId || null,\n        autoSend: $json.email.autoSend === true\n      }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Backend : analyse IA + décision RDV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "Urgence vitale ?-c1",
+              "leftValue": "={{ $json.isEmergency === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Urgence vitale ?",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [400, 260]
+      "position": [
+        700,
+        100
+      ]
     },
     {
       "parameters": {
-        "url": "http://localhost:5000/api/emails/ingest",
         "method": "POST",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"sender\": {\n    \"name\": \"{{ $json['sender.name'] || $json.sender?.name || 'Patient Cabinet' }}\",\n    \"email\": \"{{ $json['sender.email'] || $json.sender?.email || 'patient@example.tn' }}\"\n  },\n  \"subject\": \"{{ $json.subject || 'Demande patient' }}\",\n  \"body\": \"{{ $json.body || '' }}\",\n  \"clinicId\": \"66f1234567890abcdef12345\"\n}"
-      },
-      "name": "Microservice Backend Ingestion & IA",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [640, 260]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "string": [
+        "url": "={{ ($env.N8N_WEBHOOK_BASE_URL || 'http://localhost:5678/webhook') + '/emergency-alert' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "value1": "={{ $json.email?.intent || $json.intent }}",
-              "value2": "EMERGENCY"
+              "name": "x-internal-key",
+              "value": "={{ $env.INTERNAL_API_KEY || '' }}"
             }
           ]
-        }
-      },
-      "name": "Est-ce une Urgence Vitale ?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [880, 260]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:5000/api/integrations/whatsapp/send-notification",
-        "method": "POST",
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"type\": \"EMERGENCY\",\n  \"recipient\": \"+216 98 111 222\",\n  \"message\": \"🚨 ALERTE URGENCE CRITIQUE CABINET : E-mail vital reçu de {{ $json.email?.sender?.name || $json.sender?.name }}. Sujet : {{ $json.email?.subject || $json.subject }}. Protocole SAMU 190 activé.\"\n}"
+        "jsonBody": "={{ JSON.stringify({ emailId: $json._id, patient: $json.sender, subject: $json.subject, excerpt: ($json.body || '').slice(0, 300) }) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
-      "name": "Alerte WhatsApp Praticien d'Astreinte",
+      "name": "Déclencher escalade urgence",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1120, 160]
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        0
+      ],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
-              "value1": "={{ $json.email?.intent || $json.intent }}",
-              "value2": "APPOINTMENT"
+              "id": "Résultat-0",
+              "name": "decision",
+              "value": "={{ $json.decision }}",
+              "type": "string"
+            },
+            {
+              "id": "Résultat-1",
+              "name": "statut",
+              "value": "={{ $json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "Résultat-2",
+              "name": "praticien",
+              "value": "={{ $json.practitioner?.name || 'à préciser par le patient' }}",
+              "type": "string"
+            },
+            {
+              "id": "Résultat-3",
+              "name": "reponseEnvoyee",
+              "value": "={{ $json.reply?.sent === true }}",
+              "type": "boolean"
+            },
+            {
+              "id": "Résultat-4",
+              "name": "brouillon",
+              "value": "={{ $json.draftReply }}",
+              "type": "string"
             }
           ]
-        }
+        },
+        "options": {}
       },
-      "name": "Est-ce une Demande de RDV ?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [1120, 360]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:5000/api/integrations/whatsapp/send-notification",
-        "method": "POST",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"type\": \"APPOINTMENT\",\n  \"recipient\": \"+216 98 111 222\",\n  \"message\": \"📅 NOUVELLE DEMANDE DE RDV : Patient {{ $json.email?.sender?.name || $json.sender?.name }}. Créneau analysé et synchronisé avec Google Calendar du Dr. Rayen.\"\n}"
-      },
-      "name": "Notification Secrétariat RDV",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1360, 320]
+      "name": "Résultat",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        940,
+        200
+      ]
     }
   ],
   "connections": {
-    "Quand on clique sur 'Tester'": {
+    "Test manuel": {
       "main": [
         [
           {
-            "node": "Formater Données Patient Entrant",
+            "node": "Normaliser l'e-mail",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Webhook Ingestion E-mail": {
+    "Webhook ingest-email": {
       "main": [
         [
           {
-            "node": "Formater Données Patient Entrant",
+            "node": "Normaliser l'e-mail",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Formater Données Patient Entrant": {
+    "Normaliser l'e-mail": {
       "main": [
         [
           {
-            "node": "Microservice Backend Ingestion & IA",
+            "node": "Backend : analyse IA + décision RDV",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Microservice Backend Ingestion & IA": {
+    "Backend : analyse IA + décision RDV": {
       "main": [
         [
           {
-            "node": "Est-ce une Urgence Vitale ?",
+            "node": "Urgence vitale ?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Est-ce une Urgence Vitale ?": {
+    "Urgence vitale ?": {
       "main": [
         [
           {
-            "node": "Alerte WhatsApp Praticien d'Astreinte",
+            "node": "Déclencher escalade urgence",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Est-ce une Demande de RDV ?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Est-ce une Demande de RDV ?": {
-      "main": [
-        [
-          {
-            "node": "Notification Secrétariat RDV",
+            "node": "Résultat",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Tunis",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Point d'entrée e-mail externe (formulaire, autre boîte, Make/Zapier). La boîte Gmail centrale est lue directement par le backend."
   }
 }

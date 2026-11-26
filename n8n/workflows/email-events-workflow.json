@@ -1,0 +1,251 @@
+{
+  "id": "EmailEvents00001",
+  "name": "5. Journal des e-mails traités (événements backend)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "medilawai-email-processed",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook medilawai-email-processed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        100
+      ],
+      "webhookId": "7b3b6a52-1d7e-4c51-9a0e-events000001"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.decision }}",
+                    "rightValue": "DIRECT_CONFIRMATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "RDV confirmé"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.decision }}",
+                    "rightValue": "NEEDS_CLARIFICATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Praticien à préciser"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.decision }}",
+                    "rightValue": "EMERGENCY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Urgence"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Autre"
+        }
+      },
+      "name": "Selon la décision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        240,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "RDV confirmé-0",
+              "name": "resume",
+              "value": "={{ '✅ ' + $json.body.patient.email + ' → ' + ($json.body.practitioner?.name || '') + ' | réponse envoyée : ' + $json.body.replySent }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "RDV confirmé",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "Clarification-0",
+              "name": "resume",
+              "value": "={{ '❓ ' + $json.body.patient.email + ' : praticien demandé au patient | envoyé : ' + $json.body.replySent }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Clarification",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "Urgence-0",
+              "name": "resume",
+              "value": "={{ '🚨 ' + $json.body.patient.email }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Urgence",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "Autre-0",
+              "name": "resume",
+              "value": "={{ 'ℹ️ ' + $json.body.decision + ' — ' + $json.body.patient.email }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Autre",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        500,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook medilawai-email-processed": {
+      "main": [
+        [
+          {
+            "node": "Selon la décision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Selon la décision": {
+      "main": [
+        [
+          {
+            "node": "RDV confirmé",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clarification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Urgence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Autre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Tunis",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Reçoit chaque décision du moteur e-mail (visible dans Exécutions). Branchez ici Slack, Sheets, SMS…"
+  }
+}

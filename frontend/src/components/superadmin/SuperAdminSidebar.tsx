@@ -52,14 +52,14 @@ export const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({
 
   const navItems: { id: SuperAdminTabId; label: string; icon: React.ElementType; badge?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'cabinets', label: 'Cabinets', icon: Building2, badge: '4' },
+    { id: 'cabinets', label: 'Cabinets', icon: Building2 },
     { id: 'doctors', label: 'Médecins & Avocats', icon: Stethoscope },
-    { id: 'users', label: 'Utilisateurs', icon: Users, badge: '17' },
+    { id: 'users', label: 'Utilisateurs', icon: Users },
     { id: 'subscriptions', label: 'Abonnements', icon: CreditCard },
     { id: 'payments', label: 'Paiements', icon: Receipt },
-    { id: 'ai-supervision', label: 'Supervision IA', icon: Bot, badge: '94.2%' },
-    { id: 'automations', label: 'Automatisations', icon: Workflow, badge: '4 n8n' },
-    { id: 'monitoring', label: 'Monitoring', icon: Activity, badge: 'UP' },
+    { id: 'ai-supervision', label: 'Supervision IA', icon: Bot },
+    { id: 'automations', label: 'Automatisations', icon: Workflow },
+    { id: 'monitoring', label: 'Monitoring', icon: Activity },
     { id: 'security', label: 'Sécurité', icon: ShieldCheck },
     { id: 'settings', label: 'Paramètres', icon: Settings }
   ];

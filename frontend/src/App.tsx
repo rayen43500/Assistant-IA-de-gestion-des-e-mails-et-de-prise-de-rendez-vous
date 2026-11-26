@@ -24,9 +24,7 @@ import { useAppStore } from './stores/useAppStore';
 
 export default function App() {
   // Sécurité : l'accès direct à l'espace applicatif exige un token valide en localStorage
-  const [inAppMode, setInAppMode] = useState<boolean>(() => {
-    return !!localStorage.getItem('medilaw_jwt_token');
-  });
+  const [inAppMode, setInAppMode] = useState<boolean>(() => useAppStore.getState().isAuthenticated);
   const [patientMode, setPatientMode] = useState<boolean>(false);
   const [cabinetPreviewMode, setCabinetPreviewMode] = useState<boolean>(false);
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
@@ -58,7 +56,9 @@ export default function App() {
     }
   ]);
 
-  const { addEmail, loadEmails, loadAppointments, checkConnection, currentUser, logout, showToast } = useAppStore();
+  const { addEmail, checkConnection, restoreSession, loadAllData, currentUser, logout, showToast, isAuthenticated } = useAppStore();
+  // L'espace professionnel exige une session authentifiée ; l'espace patient public est accessible sans compte
+  const canSeeWorkspace = isAuthenticated || patientMode;
 
   const handleLogout = () => {
     logout();
@@ -74,13 +74,35 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Connexion automatique et chargement dynamique depuis le backend
+    // Vérification de la session enregistrée, puis chargement des données réelles
     checkConnection();
-    loadEmails();
-    loadAppointments();
+    restoreSession().then((ok) => {
+      if (ok) {
+        loadAllData();
+        const role = useAppStore.getState().currentUser?.role;
+        if (role === 'PATIENT') setPatientMode(true);
+      } else {
+        setInAppMode(false);
+      }
+    });
+
+    const onExpired = () => {
+      logout();
+      setInAppMode(false);
+      setPatientMode(false);
+      showToast({ title: 'Session expirée', message: 'Veuillez vous reconnecter.', type: 'warning' });
+    };
+    window.addEventListener('medilaw:session-expired', onExpired);
 
     // Détection du retour d'autorisation Google OAuth
     const params = new URLSearchParams(window.location.search);
+
+    // Lien de gestion de rendez-vous reçu par e-mail : ouverture de l'espace patient
+    if (params.get('token') && !useAppStore.getState().isAuthenticated) {
+      useAppStore.getState().setCurrentUser({ id: '', name: 'Invité', email: '', role: 'PATIENT', organizationName: 'Espace Patient', sector: 'MEDICAL' });
+      setPatientMode(true);
+      setInAppMode(true);
+    }
     if (params.get('google_connected') === 'success') {
       const email = params.get('doctor_email') || '';
       setInAppMode(true);
@@ -92,6 +114,7 @@ export default function App() {
       });
       window.history.replaceState({}, document.title, window.location.pathname);
     }
+    return () => window.removeEventListener('medilaw:session-expired', onExpired);
   }, []);
 
   return (
@@ -125,20 +148,31 @@ export default function App() {
         <OnboardingWizard
           onComplete={() => {
             setShowOnboarding(false);
-            setInAppMode(true);
             setPatientMode(false);
             setCurrentTab('dashboard');
+            if (useAppStore.getState().isAuthenticated) {
+              setInAppMode(true);
+            } else {
+              // Le cabinet est configuré : création du compte pour y accéder
+              setAuthModalMode('REGISTER');
+              setShowAuthModal(true);
+            }
           }}
           onCancel={() => setShowOnboarding(false)}
         />
       )}
 
       {/* Public Landing Page Mode */}
-      {!inAppMode ? (
+      {!inAppMode || !canSeeWorkspace ? (
         <PublicLandingPage
           onEnterApp={() => {
-            setInAppMode(true);
-            setCabinetPreviewMode(false);
+            if (useAppStore.getState().isAuthenticated) {
+              setInAppMode(true);
+              setCabinetPreviewMode(false);
+            } else {
+              setAuthModalMode('LOGIN');
+              setShowAuthModal(true);
+            }
           }}
           onOpenOnboarding={() => setShowOnboarding(true)}
           onOpenAuth={(mode) => {
@@ -147,13 +181,14 @@ export default function App() {
           }}
           onOpenPatientPortal={() => {
             const state = useAppStore.getState();
+            // Espace patient public (réservation sans compte)
             if (state.currentUser?.role !== 'PATIENT') {
               state.setCurrentUser({
-                id: 'patient-1',
-                name: 'Amine Jaziri',
-                email: 'amine.jaziri@gmail.com',
+                id: '',
+                name: 'Invité',
+                email: '',
                 role: 'PATIENT',
-                organizationName: 'Espace Patient Amine',
+                organizationName: 'Espace Patient',
                 sector: 'MEDICAL'
               });
             }

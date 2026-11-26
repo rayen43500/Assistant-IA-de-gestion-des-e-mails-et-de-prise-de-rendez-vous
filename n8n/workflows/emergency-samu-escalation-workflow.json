@@ -1,82 +1,75 @@
 {
-  "name": "4. Escalade d'Urgence Critique & SAMU Tunisie (190 / 198)",
+  "id": "p61YDYKHJlnFgNRN",
+  "name": "4. Escalade d'urgence vitale (SAMU 190 / 198)",
   "nodes": [
-    {
-      "parameters": {},
-      "name": "Quand on clique sur 'Tester'",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [200, 180]
-    },
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "emergency-alert",
+        "responseMode": "lastNode",
         "options": {}
       },
-      "name": "Webhook Alerte Urgence",
+      "name": "Webhook emergency-alert",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
-      "position": [200, 340]
+      "typeVersion": 2,
+      "position": [
+        0,
+        100
+      ],
+      "webhookId": "7b3b6a52-1d7e-4c51-9a0e-emergency001"
     },
     {
       "parameters": {
-        "url": "http://localhost:5000/api/integrations/whatsapp/send-notification",
         "method": "POST",
+        "url": "={{ $env.BACKEND_URL || 'http://localhost:5000' }}/api/integrations/whatsapp/send-notification",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-key",
+              "value": "={{ $env.INTERNAL_API_KEY || '' }}"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"type\": \"CRITICAL_EMERGENCY_SAMU_190\",\n  \"recipient\": \"+216 98 111 222\",\n  \"message\": \"🚨 ALERTE ROUGE SAMU / CABINET : Patient en détresse vitale détecté par le modèle IA. Notification prioritaire transmise au Dr. Rayen B. et redirection d'urgence SAMU 190 / Protection Civile 198.\"\n}"
+        "jsonBody": "={{ JSON.stringify({ type: 'EMERGENCY', message: '🚨 URGENCE : message de ' + ($json.body.patient?.name || $json.body.patient?.email || 'patient') + ' — ' + ($json.body.subject || '') + ' — ' + ($json.body.excerpt || '') }) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
-      "name": "Alerte SMS Direct Praticien & SAMU",
+      "name": "Alerte praticien d'astreinte",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [480, 260]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:5000/api/ai/daily-summary",
-        "method": "GET",
-        "options": {}
-      },
-      "name": "Vérifier Escalades Actives",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [740, 260]
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
-    "Quand on clique sur 'Tester'": {
+    "Webhook emergency-alert": {
       "main": [
         [
           {
-            "node": "Alerte SMS Direct Praticien & SAMU",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Webhook Alerte Urgence": {
-      "main": [
-        [
-          {
-            "node": "Alerte SMS Direct Praticien & SAMU",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Alerte SMS Direct Praticien & SAMU": {
-      "main": [
-        [
-          {
-            "node": "Vérifier Escalades Actives",
+            "node": "Alerte praticien d'astreinte",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Tunis",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "description": "Déclenché par le backend quand un e-mail décrit des symptômes vitaux. Le patient a déjà reçu les consignes SAMU."
   }
 }

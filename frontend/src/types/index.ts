@@ -20,6 +20,13 @@ export interface EmailItem {
   subject: string;
   body: string;
   receivedAt: string;
+  /** Date brute (YYYY-MM-DDTHH:mm) pour les statistiques */
+  receivedAtISO?: string;
+  /** Réponse au patient : DRAFT (brouillon), SENT (envoyée), FAILED */
+  replyStatus?: 'DRAFT' | 'SENT' | 'FAILED';
+  /** Décision du moteur de RDV (DIRECT_CONFIRMATION, NEEDS_CLARIFICATION…) */
+  bookingDecision?: string;
+  threadId?: string;
   isRead: boolean;
   intent: 'APPOINTMENT' | 'PRICING' | 'ADMINISTRATIVE' | 'EMERGENCY' | 'SPAM' | 'GENERAL' | 'DOCUMENT' | 'CANCELLATION' | 'INFORMATION' | 'OTHER';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';

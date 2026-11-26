@@ -16,6 +16,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
+import { DEMO_MODE, SERVER_LABEL } from '../../services/apiClient';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -34,8 +35,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const { login, register, showToast, isBackendConnected, backendUrl } = useAppStore();
 
   // Login form state
-  const [loginEmail, setLoginEmail] = useState('dr.bensalem@cabinet-ai.tn');
-  const [loginPassword, setLoginPassword] = useState('password123');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   // Register form state
   const [regName, setRegName] = useState('');
@@ -52,19 +53,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleQuickDemo = (role: 'DOCTOR' | 'LAWYER' | 'ADMIN' | 'PATIENT') => {
     setMode('LOGIN');
     setErrorMessage(null);
+    // Comptes de démonstration créés par le seed (backend/src/config/seed.js)
     if (role === 'DOCTOR') {
       setLoginEmail('dr.bensalem@cabinet-ai.tn');
-      setLoginPassword('Password2026!');
     } else if (role === 'LAWYER') {
-      setLoginEmail('me.trabelsi@avocats-tunis.tn');
-      setLoginPassword('Password2026!');
+      setLoginEmail('dr.nadia@cabinet-ai.tn');
     } else if (role === 'ADMIN') {
       setLoginEmail('admin@medilaw.ai');
-      setLoginPassword('AdminSecurise2026!');
     } else {
       setLoginEmail('patient@medilaw.ai');
-      setLoginPassword('Patient2026!');
     }
+    setLoginPassword('Password123!');
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -165,7 +164,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Modal Scrollable Body */}
         <div className="p-6 overflow-y-auto space-y-5">
           {/* Quick Demo Credentials shortcuts for testing */}
-          {mode === 'LOGIN' && (
+          {mode === 'LOGIN' && DEMO_MODE && (
             <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-100 space-y-2">
               <div className="flex items-center justify-between text-[11px] font-bold text-blue-900">
                 <span className="flex items-center gap-1.5">
@@ -231,7 +230,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     required
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="dr.bensalem@cabinet-ai.tn"
+                    placeholder="vous@votre-cabinet.tn"
+                    autoComplete="email"
                     className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
@@ -411,7 +411,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* Security footnote */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-2 text-[10px] text-slate-400">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Serveur connecté à <strong className="text-slate-600 font-mono">localhost:5000 (Mode Local)</strong></span>
+            <span>Connexion chiffrée • Serveur <strong className={`font-mono ${isBackendConnected ? 'text-slate-600' : 'text-rose-600'}`}>{isBackendConnected ? SERVER_LABEL : 'injoignable'}</strong></span>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Search, 
@@ -20,6 +20,11 @@ export const ContactsDirectoryView: React.FC = () => {
   const { sector, contacts, addContact, updateContact, deleteContact, showToast } = useAppStore();
   const [search, setSearch] = useState('');
   const [selectedContact, setSelectedContact] = useState<any>(contacts[0] || null);
+  // Sélection par défaut quand la liste réelle arrive du serveur
+  useEffect(() => {
+    if (!selectedContact && contacts.length) setSelectedContact(contacts[0]);
+    if (selectedContact && !contacts.some(c => c.id === selectedContact.id || c.email === selectedContact.email)) setSelectedContact(contacts[0] || null);
+  }, [contacts]);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingContact, setEditingContact] = useState<any>(null);
@@ -60,9 +65,9 @@ export const ContactsDirectoryView: React.FC = () => {
       phone: newPhone,
       identifier: newIdentifier || `MED-${Date.now().toString().slice(-4)}`,
       category: newCategory,
-      lastInteraction: 'À l’instant',
+      lastInteraction: new Date().toLocaleDateString('fr-FR'),
       totalAppointments: 0,
-      notes: newNotes || 'Nouveau dossier créé.'
+      notes: newNotes || ''
     };
 
     addContact(newC);

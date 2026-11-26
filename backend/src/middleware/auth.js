@@ -2,7 +2,48 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Clinic from '../models/Clinic.js';
 
-export const protect = async (req, res, next) => {
+// Les sessions démo utilisent un clinicId fictif : on le rattache au cabinet réel en base.
+const clinicCache = new Map();
+async function resolveClinicId(clinicId) {
+  try {
+    if (Clinic.db?.readyState !== 1) return clinicId;
+    if (clinicCache.has(String(clinicId))) return clinicCache.get(String(clinicId));
+    let resolved = clinicId;
+    const exists = /^[0-9a-f]{24}$/i.test(String(clinicId)) && await Clinic.exists({ _id: clinicId });
+    if (!exists) {
+      const first = await Clinic.findOne().select('_id').lean();
+      if (first) resolved = String(first._id);
+    }
+    clinicCache.set(String(clinicId), resolved);
+    return resolved;
+  } catch {
+    return clinicId;
+  }
+}
+
+const withClinic = (handler) => async (req, res, next) => handler(req, res, async () => {
+  req.clinicId = await resolveClinicId(req.clinicId);
+  if (req.user) req.user.clinicId = req.clinicId;
+  next();
+});
+
+const IS_PROD = process.env.NODE_ENV === 'production';
+// Jetons « démo » : uniquement en développement (jamais en production)
+const DEMO_TOKENS_ALLOWED = !IS_PROD && process.env.ALLOW_DEMO_TOKENS !== 'false';
+export const JWT_SECRET = process.env.JWT_SECRET || (IS_PROD ? null : 'dev_only_jwt_secret_change_me');
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET doit être défini en production.');
+}
+
+const DEMO_USER = {
+  _id: '66f1234567890abcdef12346',
+  name: 'Session démo',
+  email: 'demo@medilawai.local',
+  role: 'PRATICIEN',
+  clinicId: '66f1234567890abcdef12345',
+};
+
+export const protect = withClinic(async (req, res, next) => {
   let token;
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
@@ -12,57 +53,33 @@ export const protect = async (req, res, next) => {
     return res.status(401).json({ message: 'Non autorisé, aucun jeton fourni' });
   }
 
-  // Support transparent des jetons de session démo / développement local
-  if (token.startsWith('demo_') || token.includes('demo')) {
-    req.user = {
-      _id: '66f1234567890abcdef12346',
-      name: 'Dr. Rayen B.',
-      email: 'rayen.9b7@gmail.com',
-      role: 'PRATICIEN',
-      clinicId: '66f1234567890abcdef12345'
-    };
-    req.clinicId = '66f1234567890abcdef12345';
+  if (DEMO_TOKENS_ALLOWED && token.startsWith('demo_')) {
+    req.user = { ...DEMO_USER };
+    req.clinicId = DEMO_USER.clinicId;
     return next();
   }
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_cabinet_ai_2026');
-    try {
-      if (User.db?.readyState === 1) {
-        req.user = await User.findById(decoded.id).select('-password');
-      }
-    } catch (dbErr) {
-      // Ignorer si la base est hors ligne
-    }
-
-    if (!req.user) {
-      req.user = {
-        _id: decoded.id || '66f1234567890abcdef12346',
-        name: decoded.name || 'Dr. Rayen B.',
-        email: decoded.email || 'rayen.9b7@gmail.com',
-        role: decoded.role || 'PRATICIEN',
-        clinicId: decoded.clinicId || '66f1234567890abcdef12345'
-      };
-    }
-    // Injecter clinicId pour l'isolation multi-tenant
-    req.clinicId = req.user.clinicId || '66f1234567890abcdef12345';
-    next();
+    decoded = jwt.verify(token, JWT_SECRET);
   } catch (error) {
-    // Si c'est un token démo ou invalide en environnement de test/local, autoriser en tant que praticien
-    if (process.env.NODE_ENV !== 'production' || token.includes('session') || token.length < 50) {
-      req.user = {
-        _id: '66f1234567890abcdef12346',
-        name: 'Dr. Rayen B.',
-        email: 'rayen.9b7@gmail.com',
-        role: 'PRATICIEN',
-        clinicId: '66f1234567890abcdef12345'
-      };
-      req.clinicId = '66f1234567890abcdef12345';
-      return next();
-    }
-    return res.status(401).json({ message: 'Jeton invalide ou expiré', error: error.message });
+    return res.status(401).json({ message: 'Session expirée ou invalide, veuillez vous reconnecter.' });
   }
-};
+
+  if (User.db?.readyState === 1) {
+    try {
+      req.user = await User.findById(decoded.id).select('-password');
+    } catch {}
+    if (!req.user || req.user.status === 'INACTIVE') {
+      return res.status(401).json({ message: 'Compte introuvable ou désactivé.' });
+    }
+  } else {
+    return res.status(503).json({ message: 'Base de données indisponible, réessayez dans un instant.' });
+  }
+
+  req.clinicId = req.user.clinicId ? String(req.user.clinicId) : null;
+  next();
+});
 
 export const authorize = (...roles) => {
   return (req, res, next) => {

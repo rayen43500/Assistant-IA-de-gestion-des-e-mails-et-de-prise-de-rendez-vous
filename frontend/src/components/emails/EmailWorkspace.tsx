@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
-import { 
-  Inbox, 
-  Send, 
-  FileText, 
-  Archive, 
-  AlertTriangle, 
-  Sparkles, 
-  Clock, 
-  CheckCircle2, 
-  RefreshCw, 
-  Trash2, 
-  Edit3, 
-  Languages, 
+import React, { useState, useEffect } from 'react';
+import {
+  Inbox,
+  Send,
+  FileText,
+  Archive,
+  AlertTriangle,
+  Sparkles,
+  Clock,
+  CheckCircle2,
+  RefreshCw,
+  Trash2,
+  Edit3,
+  Languages,
   SlidersHorizontal,
   Search,
   Calendar,
@@ -22,10 +22,23 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../../stores/useAppStore';
 import type { EmailItem } from '../../types';
+import { apiClient, apiErrorMessage, apiGetGoogleStatus } from '../../services/apiClient';
+import { mapEmail } from '../../services/mappers';
 
 export const EmailWorkspace: React.FC = () => {
-  const { emails, updateEmailStatus, showToast, sector, addEmail } = useAppStore();
+  const { emails, updateEmailStatus, showToast, sector, addEmail, currentUser, loadEmails } = useAppStore();
   const [selectedEmailId, setSelectedEmailId] = useState<string>(emails[0]?.id || '');
+  const [mailbox, setMailbox] = useState<{ connected: boolean; email: string }>({ connected: false, email: '' });
+
+  useEffect(() => {
+    apiGetGoogleStatus().then((st) => setMailbox({ connected: Boolean(st?.connected), email: st?.email || '' })).catch(() => {});
+    loadEmails();
+  }, []);
+
+  // Sélection automatique du premier e-mail quand la liste arrive du serveur
+  useEffect(() => {
+    if (!selectedEmailId && emails.length) setSelectedEmailId(emails[0].id);
+  }, [emails, selectedEmailId]);
   const [activeFolder, setActiveFolder] = useState<string>('all');
   const [filterSearch, setFilterSearch] = useState<string>('');
   const [isEditingDraft, setIsEditingDraft] = useState<boolean>(false);
@@ -55,68 +68,55 @@ export const EmailWorkspace: React.FC = () => {
 
   const simulateScenario = async (scenarioNumber: number) => {
     try {
-      const res = await fetch('http://localhost:5000/api/emails/simulate-scenario', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenarioNumber }),
+      const { data } = await apiClient.post('/api/emails/simulate-scenario', { scenarioNumber });
+      const newEmailItem: EmailItem = mapEmail(data.email || data);
+      newEmailItem.scenario = data.scenario || scenarioNumber;
+      addEmail(newEmailItem);
+      setSelectedEmailId(newEmailItem.id);
+      showToast({
+        title: `Scénario ${scenarioNumber} traité`,
+        message: data.scenarioDescription || 'E-mail de test analysé par le moteur (aucun envoi).',
+        type: 'success',
       });
-      if (res.ok) {
-        const data = await res.json();
-        const em = data.email || data;
-        const newEmailItem: EmailItem = {
-          id: em.id || em._id || 'em-' + Date.now(),
-          sender: em.sender || { name: 'Contact Externe', email: 'contact@example.com' },
-          subject: em.subject || 'Sans objet',
-          body: em.body || em.bodyText || '',
-          receivedAt: 'À l’instant',
-          isRead: false,
-          intent: (em.intent || 'APPOINTMENT') as any,
-          priority: em.intent === 'EMERGENCY' ? 'CRITICAL' : 'MEDIUM',
-          status: em.status || 'PENDING_VALIDATION',
-          confidence: em.confidence || 0.92,
-          draftReply: em.draftReply || em.clarificationMessage || '',
-          folder: (em.status === 'WAITING_FOR_REPLY' || em.status === 'NEEDS_CLARIFICATION') ? 'unassigned' : 'inbox',
-          scenario: data.scenario || scenarioNumber,
-          isRegisteredContact: data.contact?.isRegistered || false,
-          detectedLanguage: em.detectedLanguage || 'FR',
-          recipient: 'contact@medilawai.com',
-          extractedEntities: em.extractedEntities,
-        };
-        addEmail(newEmailItem);
-        setSelectedEmailId(newEmailItem.id);
-        showToast({
-          title: `Scénario ${scenarioNumber} Injecté avec Succès !`,
-          message: data.scenarioDescription || `Message traité et orienté vers l'espace du Dr. Rayen B.`,
-          type: 'success',
-        });
-      }
     } catch (err: any) {
       showToast({
-        title: 'Erreur Simulation',
-        message: err.message,
-        type: 'error',
+        title: 'Test impossible',
+        message: apiErrorMessage(err),
+        type: 'danger',
       });
     }
   };
 
-  const handleApprove = () => {
-    if (!selectedEmail) return;
-    updateEmailStatus(selectedEmail.id, 'VALIDATED_AND_SENT', editedDraft || selectedEmail.draftReply);
-    showToast({
-      title: 'E-mail validé et transmis au patient !',
-      message: `La réponse a été expédiée avec succès à ${selectedEmail.sender.email}`,
-      type: 'success'
-    });
-    setIsEditingDraft(false);
+  const [sending, setSending] = useState(false);
+  const handleApprove = async () => {
+    if (!selectedEmail || sending) return;
+    setSending(true);
+    const ok = await updateEmailStatus(selectedEmail.id, 'VALIDATED_AND_SENT', editedDraft || selectedEmail.draftReply);
+    setSending(false);
+    if (ok) {
+      showToast({
+        title: 'Réponse envoyée',
+        message: `La réponse a été envoyée à ${selectedEmail.sender.email}.`,
+        type: 'success'
+      });
+      setIsEditingDraft(false);
+    }
   };
 
   const handleRegenerate = (tone: string) => {
     if (!selectedEmail) return;
-    let newReply = selectedEmail.draftReply;
+    // Reformulation du VRAI brouillon : jamais de contenu inventé (créneau, confirmation…)
+    const base = editedDraft || selectedEmail.draftReply || '';
+    let newReply = base;
     if (tone === 'SHORT') {
-      newReply = `Bonjour,\nVotre demande a bien été prise en compte par le cabinet. Le créneau est réservé.\nCordialement,\nSecrétariat.`;
+      const paragraphs = base.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+      newReply = paragraphs.length > 3
+        ? [paragraphs[0], paragraphs[1], paragraphs[paragraphs.length - 1]].join('\n\n')
+        : base;
     } else if (tone === 'FORMAL') {
-      newReply = `Monsieur/Madame,\nNous vous confirmons la bonne réception de votre correspondance. Le praticien a examiné vos disponibilités avec la plus grande attention.\nRestant à votre disposition,\nSecrétariat Général.`;
+      newReply = base
+        .replace(/^Bonjour[^,\n]*,/, 'Madame, Monsieur,')
+        .replace(/Bien cordialement,|Cordialement,/, 'Nous vous prions d’agréer, Madame, Monsieur, nos salutations distinguées.');
     }
     setEditedDraft(newReply);
     setIsEditingDraft(true);
@@ -139,7 +139,7 @@ export const EmailWorkspace: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Réception & Envoi : <span className="font-semibold text-blue-600">contact@medilawai.com</span> • Espace sécurisé : <span className="font-semibold text-slate-700">Dr. Rayen B.</span>
+            Réception & Envoi : <span className={`font-semibold ${mailbox.connected ? 'text-blue-600' : 'text-amber-600'}`}>{mailbox.connected ? mailbox.email : 'Gmail non connecté (réponses en brouillon)'}</span> • Espace : <span className="font-semibold text-slate-700">{currentUser?.name}</span>
           </p>
         </div>
 
@@ -277,10 +277,10 @@ export const EmailWorkspace: React.FC = () => {
               return (
                 <div
                   key={em.id}
-                  onClick={() => { 
-                    setSelectedEmailId(em.id); 
-                    setIsEditingDraft(false); 
-                    setEditedDraft(''); 
+                  onClick={() => {
+                    setSelectedEmailId(em.id);
+                    setIsEditingDraft(false);
+                    setEditedDraft('');
                     setShowMobileDetail(true);
                   }}
                   className={`p-3.5 cursor-pointer transition-all ${
@@ -297,10 +297,10 @@ export const EmailWorkspace: React.FC = () => {
 
                   <div className="flex items-center gap-1.5 mt-2">
                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                      isUrgent 
-                        ? 'bg-rose-100 text-rose-700 border border-rose-300' 
-                        : em.intent === 'APPOINTMENT' 
-                        ? 'bg-blue-100 text-blue-700' 
+                      isUrgent
+                        ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                        : em.intent === 'APPOINTMENT'
+                        ? 'bg-blue-100 text-blue-700'
                         : 'bg-slate-100 text-slate-700'
                     }`}>
                       {em.intent}
@@ -363,7 +363,7 @@ export const EmailWorkspace: React.FC = () => {
                     <span className="font-semibold text-slate-800">{selectedEmail.sender.name}</span>
                     <span>&lt;{selectedEmail.sender.email}&gt;</span>
                     <span className="text-slate-400">vers</span>
-                    <span className="font-semibold text-blue-600">contact@medilawai.com</span>
+                    <span className="font-semibold text-blue-600">{selectedEmail.recipient || mailbox.email || 'boîte centrale'}</span>
                     {selectedEmail.sender.phone && (
                       <span className="text-blue-600 font-semibold">• {selectedEmail.sender.phone}</span>
                     )}
@@ -461,13 +461,21 @@ export const EmailWorkspace: React.FC = () => {
                 </button>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleApprove}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition-all"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Valider & Expédier via contact@medilawai.com</span>
-                  </button>
+                  {selectedEmail.replyStatus === 'SENT' || ['SENT', 'VALIDATED_AND_SENT'].includes(selectedEmail.status) ? (
+                    <span className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-xs rounded-xl flex items-center gap-1.5">
+                      <Send className="w-3.5 h-3.5" /> Réponse déjà envoyée
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleApprove}
+                      disabled={sending || !mailbox.connected}
+                      title={mailbox.connected ? '' : 'Connectez la boîte Gmail dans Paramètres pour envoyer'}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition-all"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{sending ? 'Envoi…' : mailbox.connected ? `Valider et envoyer via ${mailbox.email}` : 'Gmail non connecté'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

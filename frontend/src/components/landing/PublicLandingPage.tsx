@@ -87,6 +87,12 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           {/* Boutons à droite */}
           <div className="flex items-center gap-2.5">
             <button
+              onClick={onOpenPatientPortal}
+              className="hidden sm:inline-flex text-xs font-bold text-emerald-700 hover:text-emerald-800 px-3.5 py-2 rounded-xl transition-colors"
+            >
+              Prendre rendez-vous
+            </button>
+            <button
               onClick={() => onOpenAuth?.('LOGIN')}
               className="text-xs font-bold text-slate-700 hover:text-[#2563EB] px-3.5 py-2 rounded-xl transition-colors"
             >
@@ -127,6 +133,13 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               className="px-6 py-3.5 bg-[#2563EB] hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/25 transition-all flex items-center gap-2"
             >
               <span>Créer mon cabinet</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onOpenPatientPortal}
+              className="px-6 py-3.5 bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
+            >
+              <span>Je suis patient : prendre rendez-vous</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
