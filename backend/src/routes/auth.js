@@ -18,10 +18,16 @@ const generateToken = (id) => {
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role, clinicName, clinicType } = req.body || {};
-    if (!name || !email || !password) {
+    if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string' || !name.trim() || !email || !password) {
       return res.status(400).json({ message: 'Nom, e-mail et mot de passe sont obligatoires.' });
     }
-    if (String(password).length < 8) {
+    if (!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/.test(email.trim())) {
+      return res.status(400).json({ message: 'Adresse e-mail invalide.' });
+    }
+    if (password.length > 200) {
+      return res.status(400).json({ message: 'Mot de passe trop long.' });
+    }
+    if (password.length < 8) {
       return res.status(400).json({ message: 'Le mot de passe doit contenir au moins 8 caractères.' });
     }
     // Inscription publique : seuls les rôles praticien et patient sont autorisés
@@ -83,8 +89,9 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const { email, password } = req.body || {};
+    // Types stricts : bloque les injections d'opérateurs MongoDB ({ "$ne": null }, { "$gt": "" })
+    if (typeof email !== 'string' || typeof password !== 'string' || !email || !password || email.length > 254 || password.length > 200) {
       return res.status(400).json({ message: 'E-mail et mot de passe requis.' });
     }
     const user = await User.findOne({ email: String(email).toLowerCase().trim() }).populate('clinicId');

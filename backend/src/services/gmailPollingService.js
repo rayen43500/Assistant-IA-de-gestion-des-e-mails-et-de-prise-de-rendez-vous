@@ -97,10 +97,21 @@ export function stripQuotedReply(text = '') {
   return result || text.trim();
 }
 
-function parseAddress(header = '') {
-  const m = header.match(/^\s*(?:"?([^"<]*?)"?\s*)?<([^>]+)>\s*$/);
-  if (m) return { name: (m[1] || '').trim(), email: m[2].trim().toLowerCase() };
-  return { name: '', email: header.trim().toLowerCase() };
+/**
+ * « Nom <email> » → { name, email }. Analyse linéaire sans regex : l'ancienne expression
+ * régulière était vulnérable au ReDoS (en-tête From forgé avec des milliers d'espaces).
+ */
+export function parseAddress(header = '') {
+  const raw = String(header).slice(0, 1000);
+  const lt = raw.lastIndexOf('<');
+  const gt = lt === -1 ? -1 : raw.indexOf('>', lt);
+  if (lt !== -1 && gt > lt && raw.slice(gt + 1).trim() === '') {
+    let name = raw.slice(0, lt).trim();
+    if (name.startsWith('"')) name = name.slice(1);
+    if (name.endsWith('"')) name = name.slice(0, -1);
+    return { name: name.trim(), email: raw.slice(lt + 1, gt).trim().toLowerCase() };
+  }
+  return { name: '', email: raw.trim().toLowerCase() };
 }
 
 async function gmailGet(url, accessToken) {

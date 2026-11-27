@@ -31,3 +31,17 @@ n8n (Moteur d'automatisation - Port 5678 avec volume n8n_data)
 prometheus (Scraping des métriques - Port 9090)
 grafana (Tableaux de bord de supervision - Port 3000)
 
+
+## Tests qualité (ISO/IEC 25010)
+
+Toutes les couches de test (unitaires, intégration, API Newman, E2E Playwright multi-navigateurs,
+performance, fiabilité, SAST/SCA/DAST, maintenabilité, portabilité) se lancent avec une seule commande,
+identique en local et dans le pipeline GitHub Actions :
+
+```bat
+tests-qualite.bat              :: toutes les couches
+tests-qualite.bat unit api     :: couches choisies
+```
+
+Résumé des résultats : `quality/reports/summary.md`. Stratégie, règles métier et matrice de
+traçabilité : [docs/QUALITE_ISO25010.md](docs/QUALITE_ISO25010.md).

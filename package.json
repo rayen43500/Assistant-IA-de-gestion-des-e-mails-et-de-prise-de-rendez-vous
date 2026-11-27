@@ -20,7 +20,14 @@
     "docker:down": "docker compose down",
     "test:backend": "npm --prefix backend run test",
     "health:ai": "curl http://localhost:8000/health",
-    "health:backend": "curl http://localhost:5000/health"
+    "health:backend": "curl http://localhost:5000/health",
+    "test:quality": "node quality/run-all.js",
+    "test:quality:setup": "npm ci --prefix backend && npm ci --prefix frontend && npm ci --prefix quality && cd quality && npx playwright install chromium firefox",
+    "test:unit": "node quality/run-all.js unit",
+    "test:api": "node quality/run-all.js api",
+    "test:e2e": "node quality/run-all.js e2e",
+    "test:perf": "node quality/run-all.js perf",
+    "test:security": "node quality/run-all.js lint sca sast dast"
   },
   "keywords": [
     "saas",

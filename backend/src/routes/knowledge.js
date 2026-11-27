@@ -1,10 +1,12 @@
 import express from 'express';
+import { validateObjectIdParam } from '../middleware/validateId.js';
 import Document from '../models/Document.js';
 import AuditLog from '../models/AuditLog.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { queryKnowledgeRAG } from '../services/aiClient.js';
 
 const router = express.Router();
+router.param('id', validateObjectIdParam);
 
 // GET /api/knowledge - Liste des documents indexés
 router.get('/', protect, async (req, res) => {

@@ -41,7 +41,7 @@ export const queryKnowledgeRAG = async (query, clinicId) => {
 
 export const checkHealthAI = async () => {
   try {
-    const response = await axios.get(`${AI_SERVICE_URL}/health`, { timeout: 3000 });
+    const response = await axios.get(`${AI_SERVICE_URL}/health`, { timeout: 1200 });
     return response.data;
   } catch (error) {
     return { status: 'DEGRADED', error: error.message };

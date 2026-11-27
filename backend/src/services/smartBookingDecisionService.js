@@ -77,6 +77,7 @@ export function parseDateDetailed(text = '', now = new Date()) {
   }
 
   // 26/11/2026, 26/11, 26.11.26, 26-11
+  // eslint-disable-next-line security/detect-unsafe-regex -- quantificateurs bornés, linéaire (prouvé par tests/security_redos.test.js)
   const slashRe = /\b(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2,4}))?\b/g;
   while ((m = slashRe.exec(t))) {
     const dd = Number(m[1]); const mm = Number(m[2]);
@@ -125,6 +126,7 @@ export function parseDateDetailed(text = '', now = new Date()) {
 export function parseTimeFromText(text = '') {
   const t = normalizeText(text)
     // retirer les dates pour éviter 26/11 -> heure
+    // eslint-disable-next-line security/detect-unsafe-regex -- quantificateurs bornés, linéaire (prouvé par tests/security_redos.test.js)
     .replace(/\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b/g, ' ');
 
   const candidates = [];
@@ -154,6 +156,7 @@ export function parsePeriodPreference(text = '') {
 }
 
 export function parsePhoneFromText(text = '') {
+  // eslint-disable-next-line security/detect-unsafe-regex -- quantificateurs bornés, linéaire (prouvé par tests/security_redos.test.js)
   const m = String(text).match(/(?:\+?216[\s.-]?)?\b[2-9]\d[\s.-]?\d{3}[\s.-]?\d{3}\b/);
   return m ? m[0].replace(/\s+/g, ' ').trim() : null;
 }

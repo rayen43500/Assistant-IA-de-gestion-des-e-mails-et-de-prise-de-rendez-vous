@@ -1,4 +1,5 @@
 import express from 'express';
+import { validateObjectIdParam } from '../middleware/validateId.js';
 import { sendGmailMessage } from '../services/gmailSenderService.js';
 import { formatDateFr } from '../services/smartBookingDecisionService.js';
 import { notifyN8n, N8N_EVENTS } from '../services/n8nNotifier.js';
@@ -7,11 +8,12 @@ import Doctor from '../models/Doctor.js';
 import Patient from '../models/Patient.js';
 import DoctorPatient from '../models/DoctorPatient.js';
 import Appointment from '../models/Appointment.js';
-import Clinic from '../models/Clinic.js';
 import { calculateDoctorAvailability, loadPractitionerDay, checkTimeInDay } from '../services/availabilityService.js';
 import { syncAppointmentToGoogle } from '../services/googleCalendarService.js';
+import { canTransition } from '../services/appointmentWorkflow.js';
 
 const router = express.Router();
+router.param('id', validateObjectIdParam);
 
 /**
  * GET /api/public/doctors
@@ -77,6 +79,15 @@ router.post('/bookings', async (req, res) => {
 
     if (!doctorId || !date || !startTime || !patientName || !patientEmail || !patientPhone) {
       return res.status(400).json({ message: 'Veuillez renseigner tous les champs obligatoires (praticien, date, heure, nom, email, téléphone).' });
+    }
+    const textFields = { doctorId, date, startTime, patientName, patientEmail, patientPhone };
+    if (Object.values(textFields).some((v) => typeof v !== 'string' || v.length > 200)
+      || (reason !== undefined && (typeof reason !== 'string' || reason.length > 500))
+      || (idempotencyKey !== undefined && typeof idempotencyKey !== 'string')) {
+      return res.status(400).json({ message: 'Champs de réservation invalides.' });
+    }
+    if (!/^[0-9a-f]{24}$/i.test(doctorId)) {
+      return res.status(404).json({ message: 'Le praticien sélectionné est indisponible ou introuvable.' });
     }
 
     // 1. Vérification d'idempotence si une clé a été transmise
@@ -278,6 +289,9 @@ router.post('/bookings/:token/cancel', async (req, res) => {
 
     if (appointment.status === 'CANCELLED') {
       return res.json({ message: 'Ce rendez-vous est déjà annulé.' });
+    }
+    if (!canTransition(appointment.status, 'CANCELLED')) {
+      return res.status(409).json({ message: `Ce rendez-vous ne peut plus être annulé (statut ${appointment.status}).` });
     }
 
     appointment.status = 'CANCELLED';

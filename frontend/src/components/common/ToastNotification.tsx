@@ -37,6 +37,8 @@ export const ToastNotification: React.FC = () => {
         </div>
         <button 
           onClick={hideToast}
+          aria-label="Fermer la notification"
+          title="Fermer"
           className="opacity-70 hover:opacity-100 p-1 rounded-lg transition-colors"
         >
           <X className="w-4 h-4" />

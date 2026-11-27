@@ -134,6 +134,7 @@ export const ContactsDirectoryView: React.FC = () => {
             <input
               type="text"
               placeholder="Rechercher nom, dossier, tél..."
+              aria-label="Rechercher un patient"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-8 pr-3 py-1.5 bg-white border border-[#E5EAF2] rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -195,6 +196,15 @@ export const ContactsDirectoryView: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-xs text-slate-500">
+                      {contacts.length === 0
+                        ? 'Aucun patient pour le moment : ils apparaîtront dès leur premier rendez-vous ou e-mail.'
+                        : 'Aucun patient ne correspond à votre recherche.'}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

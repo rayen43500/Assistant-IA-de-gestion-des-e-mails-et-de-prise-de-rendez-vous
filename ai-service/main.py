@@ -179,6 +179,19 @@ KEYWORDS_SPAM = [
     "free money", "winner", "lottery"
 ]
 
+KEYWORDS_PRICING = [
+    "tarif", "prix", "honoraires", "combien coûte", "combien coute", "cnam", "remboursement", "coût", "cout",
+    "سعر", "pricing", "fees", "price",
+]
+
+KEYWORDS_ADMINISTRATIVE = [
+    "attestation", "certificat", "duplicata", "feuille de soins", "facture", "dossier médical",
+    "compte rendu", "compte-rendu", "شهادة", "certificate", "invoice",
+]
+
+# Mots indiquant une vraie demande de réservation (priment sur tarif / administratif)
+KEYWORDS_BOOKING_VERBS = ["rendez-vous", "rdv", "réserver", "créneau", "موعد", "appointment", "book"]
+
 
 def classify_text(subject: str, body: str, clinic_type: str = "MEDICAL"):
     full_text = f"{subject} {body}".lower()
@@ -215,6 +228,28 @@ def classify_text(subject: str, body: str, clinic_type: str = "MEDICAL"):
         else:
             reply = "Bonjour,\n\nVotre demande d'annulation ou de report de rendez-vous a bien été prise en compte. Le praticien et notre secrétariat en sont informés.\n\nBien cordialement."
         return "CANCELLATION", 0.94, reply, []
+
+    # 2b. SPAM (publicité, arnaques)
+    if any(k in full_text for k in KEYWORDS_SPAM):
+        return "SPAM", 0.95, "", []
+
+    wants_booking = any(k in full_text for k in KEYWORDS_BOOKING_VERBS)
+
+    # 2c. PRICING (question tarifaire sans demande explicite de rendez-vous)
+    if not wants_booking and any(k in full_text for k in KEYWORDS_PRICING):
+        reply = (
+            "Bonjour,\n\nMerci pour votre question. Les honoraires de consultation vous seront communiqués par le secrétariat. "
+            "Le cabinet accepte la prise en charge CNAM selon votre filière de soins.\n\nBien cordialement."
+        )
+        return "PRICING", 0.92, reply, []
+
+    # 2d. ADMINISTRATIVE (attestations, certificats, factures)
+    if not wants_booking and any(k in full_text for k in KEYWORDS_ADMINISTRATIVE):
+        reply = (
+            "Bonjour,\n\nVotre demande de document administratif a bien été transmise au secrétariat, "
+            "qui vous recontactera dès qu'il sera prêt.\n\nBien cordialement."
+        )
+        return "ADMINISTRATIVE", 0.91, reply, []
 
     # 3. APPOINTMENT
     if any(k in full_text for k in KEYWORDS_APPOINTMENT):
@@ -259,8 +294,9 @@ def extract_entities_from_text(text: str) -> ExtractedEntities:
     found_time = time_match.group(1) if time_match else None
 
     # Téléphone (format tunisien : +216 ou 8 chiffres)
-    phone_match = re.search(r"(?:\+216\s*)?[2459]\d{7}", text)
-    found_phone = phone_match.group(0) if phone_match else None
+    # Accepte les séparateurs usuels : +216 98 123 456, 98-123-456, 98123456
+    phone_match = re.search(r"(?:\+216[\s.-]*)?[2-9]\d(?:[\s.-]*\d){6}\b", text)
+    found_phone = re.sub(r"[\s.-]", "", phone_match.group(0)) if phone_match else None
 
     # Urgences
     urgencies = [k for k in KEYWORDS_EMERGENCY if k in lower]
@@ -563,5 +599,8 @@ def generate_reply_endpoint(req: GenerateReplyRequest):
 
 
 if __name__ == "__main__":
+    import os
+
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # Écoute locale par défaut ; en conteneur, HOST=0.0.0.0 est fourni explicitement (voir Dockerfile)
+    uvicorn.run("main:app", host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8000")))
