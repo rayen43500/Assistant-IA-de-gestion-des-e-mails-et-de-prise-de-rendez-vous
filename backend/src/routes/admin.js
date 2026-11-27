@@ -26,7 +26,7 @@ const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 async function n8nReachable() {
   const base = (process.env.N8N_WEBHOOK_BASE_URL || 'http://localhost:5678/webhook').replace(/\/webhook\/?$/, '');
   const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 2500);
+  const t = setTimeout(() => controller.abort(), 1200);
   try {
     const res = await fetch(`${base}/healthz`, { signal: controller.signal });
     return { up: res.ok, url: base };
@@ -36,6 +36,24 @@ async function n8nReachable() {
     clearTimeout(t);
   }
 }
+
+// État des services externes mis en cache 30 s : le tableau de bord ne doit pas
+// attendre un service en panne à chaque affichage (performance, §6.2)
+const HEALTH_TTL_MS = 30_000;
+let healthCache = { at: 0, value: null };
+let healthRefresh = null;
+function refreshHealth() {
+  healthRefresh ||= Promise.all([checkHealthAI(), n8nReachable()])
+    .then(([ai, n8n]) => { healthCache = { at: Date.now(), value: { ai, n8n } }; return healthCache.value; })
+    .finally(() => { healthRefresh = null; });
+  return healthRefresh;
+}
+async function servicesHealth() {
+  if (!healthCache.value) return refreshHealth(); // tout premier appel
+  if (Date.now() - healthCache.at > HEALTH_TTL_MS) refreshHealth().catch(() => {}); // rafraîchi en arrière-plan
+  return healthCache.value;
+}
+refreshHealth().catch(() => {}); // pré-chargement au démarrage du serveur
 
 // ─── Vue d'ensemble ──────────────────────────────────────────────────────────
 router.get('/overview', async (req, res) => {
@@ -47,7 +65,7 @@ router.get('/overview', async (req, res) => {
     const tf = clinicFilter(req, 'tenantId');
 
     const [clinics, doctorsActive, doctorsTotal, usersByRole, appointmentsTotal, upcoming, todayCount, cancelled,
-      emailsTotal, emails7d, emergencies, pending, replied, autoBooked, clarifications, contacts, ai, n8n] = await Promise.all([
+      emailsTotal, emails7d, emergencies, pending, replied, autoBooked, clarifications, contacts, health] = await Promise.all([
       isSuper(req) ? Clinic.countDocuments() : Clinic.countDocuments({ _id: req.clinicId }),
       Doctor.countDocuments({ ...tf, status: 'ACTIVE' }),
       Doctor.countDocuments(tf),
@@ -64,9 +82,9 @@ router.get('/overview', async (req, res) => {
       Email.countDocuments({ ...cf, bookingDecision: { $in: ['DIRECT_CONFIRMATION', 'RESCHEDULED'] } }),
       Email.countDocuments({ ...cf, bookingDecision: 'NEEDS_CLARIFICATION' }),
       Contact.countDocuments(isSuper(req) ? {} : { tenantId: req.clinicId }),
-      checkHealthAI(),
-      n8nReachable(),
+      servicesHealth(),
     ]);
+    const { ai, n8n } = health;
 
     // Activité des 7 derniers jours
     const days = Array.from({ length: 7 }, (_, i) => isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6 + i)));

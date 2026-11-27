@@ -1,4 +1,5 @@
 import express from 'express';
+import { validateObjectIdParam } from '../middleware/validateId.js';
 import Integration from '../models/Integration.js';
 import Doctor from '../models/Doctor.js';
 import Email from '../models/Email.js';
@@ -12,6 +13,7 @@ import { protect, authorize } from '../middleware/auth.js';
 import { sendValidatedReply } from './emails.js';
 
 const router = express.Router();
+router.param('id', validateObjectIdParam);
 
 /**
  * POST /api/webhooks/google/gmail

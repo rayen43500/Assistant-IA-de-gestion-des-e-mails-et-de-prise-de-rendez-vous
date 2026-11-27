@@ -1,0 +1,29 @@
+{
+  "name": "medilaw-quality-suite",
+  "private": true,
+  "type": "module",
+  "description": "Suite de tests qualité ISO/IEC 25010 (API, E2E, performance, sécurité, maintenabilité)",
+  "scripts": {
+    "all": "node run-all.js",
+    "stack": "node stack.js",
+    "lint": "eslint ../backend/src ../frontend/src",
+    "dup": "jscpd --config .jscpd.json",
+    "api": "node run-all.js api",
+    "e2e": "node run-all.js e2e",
+    "perf": "node run-all.js perf",
+    "dast": "node run-all.js dast"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.1",
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.65.1",
+    "autocannon": "^8.0.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-security": "^3.0.1",
+    "globals": "^15.15.0",
+    "jscpd": "^4.3.0",
+    "newman": "^6.2.3",
+    "newman-reporter-htmlextra": "^1.23.1",
+    "typescript-eslint": "^8.74.0"
+  }
+}

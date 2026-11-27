@@ -1,14 +1,12 @@
 import express from 'express';
-import { internalOnly, internalOrUser } from '../middleware/internalOnly.js';
+import { validateObjectIdParam } from '../middleware/validateId.js';
+import { internalOrUser } from '../middleware/internalOnly.js';
 import Email from '../models/Email.js';
-import Clinic from '../models/Clinic.js';
 import AuditLog from '../models/AuditLog.js';
 import { getPractitionerScope } from '../middleware/practitionerScope.js';
 import { protect, authorize } from '../middleware/auth.js';
-import { classifyEmailContent } from '../services/aiClient.js';
 import { processIncomingEmail } from '../services/centralEmailRouter.js';
 import EmailThread from '../models/EmailThread.js';
-import Contact from '../models/Contact.js';
 import { sendGmailMessage, buildReplySubject } from '../services/gmailSenderService.js';
 
 /**
@@ -40,6 +38,7 @@ export async function sendValidatedReply(email, content) {
 }
 
 const router = express.Router();
+router.param('id', validateObjectIdParam);
 const require_valid_id = (id) => /^[0-9a-f]{24}$/i.test(String(id || ''));
 
 // GET /api/emails - Liste des e-mails du cabinet

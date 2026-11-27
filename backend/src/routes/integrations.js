@@ -7,10 +7,8 @@ import path from 'path';
 import Integration from '../models/Integration.js';
 import Doctor from '../models/Doctor.js';
 import Clinic from '../models/Clinic.js';
-import Appointment from '../models/Appointment.js';
-import Email from '../models/Email.js';
 import { protect, authorize } from '../middleware/auth.js';
-import { encryptData, decryptData } from '../services/cryptoService.js';
+import { encryptData } from '../services/cryptoService.js';
 import {
   GOOGLE_SCOPES,
   getGoogleClientCredentials,

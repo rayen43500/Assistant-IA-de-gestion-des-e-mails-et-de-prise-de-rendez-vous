@@ -1,4 +1,5 @@
 import express from 'express';
+import { validateObjectIdParam } from '../middleware/validateId.js';
 import { internalOnly } from '../middleware/internalOnly.js';
 import { sendGmailMessage } from '../services/gmailSenderService.js';
 import { formatDateFr } from '../services/smartBookingDecisionService.js';
@@ -10,8 +11,10 @@ import { protect, authorize } from '../middleware/auth.js';
 import { calculateDoctorAvailability, loadPractitionerDay, checkTimeInDay, timeToMinutes, minutesToTime } from '../services/availabilityService.js';
 import { notifyN8n, N8N_EVENTS } from '../services/n8nNotifier.js';
 import { syncAppointmentToGoogle } from '../services/googleCalendarService.js';
+import { applyTransition, isPastAppointment } from '../services/appointmentWorkflow.js';
 
 const router = express.Router();
+router.param('id', validateObjectIdParam);
 
 // GET /api/appointments/availability - Calcul dynamique des créneaux réels (grille + pause + Google Calendar)
 router.get('/availability', protect, async (req, res) => {
@@ -310,7 +313,11 @@ router.put('/:id/cancel', protect, async (req, res) => {
       return res.status(404).json({ message: 'Rendez-vous introuvable' });
     }
 
-    appointment.status = 'CANCELLED';
+    try {
+      applyTransition(appointment, 'CANCELLED');
+    } catch (e) {
+      return res.status(409).json({ message: `Impossible d’annuler un rendez-vous au statut ${appointment.status}.`, code: e.code });
+    }
     await appointment.save();
 
     await AuditLog.create({
@@ -324,6 +331,40 @@ router.put('/:id/cancel', protect, async (req, res) => {
     res.json({ message: 'Rendez-vous annulé et créneau libéré avec succès', appointment });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de l’annulation', error: error.message });
+  }
+});
+
+// PATCH /api/appointments/:id/status - Clôture du rendez-vous (réalisé / absent / confirmé)
+router.patch('/:id/status', protect, authorize('PRATICIEN', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  try {
+    const target = String(req.body?.status || '');
+    if (!['CONFIRMED', 'COMPLETED', 'NO_SHOW'].includes(target)) {
+      return res.status(400).json({ message: 'Statut cible invalide (CONFIRMED, COMPLETED ou NO_SHOW).' });
+    }
+    const appointment = await Appointment.findOne({ _id: req.params.id, clinicId: req.clinicId, ...(await getPractitionerScope(req, 'appointment')) });
+    if (!appointment) return res.status(404).json({ message: 'Rendez-vous introuvable' });
+
+    if (['COMPLETED', 'NO_SHOW'].includes(target) && !isPastAppointment(appointment)) {
+      return res.status(409).json({ message: 'Un rendez-vous ne peut être clôturé qu’après son heure de début.', code: 'NOT_YET_STARTED' });
+    }
+    const from = appointment.status;
+    try {
+      applyTransition(appointment, target);
+    } catch (e) {
+      return res.status(409).json({ message: `Transition interdite : ${from} → ${target}.`, code: e.code });
+    }
+    await appointment.save();
+    await AuditLog.create({
+      clinicId: req.clinicId,
+      userId: req.user._id,
+      action: 'APPOINTMENT_STATUS_CHANGED',
+      resource: 'Appointment',
+      resourceId: appointment._id.toString(),
+      details: { from, to: target },
+    }).catch(() => {});
+    res.json({ message: 'Statut mis à jour', appointment });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors du changement de statut', error: error.message });
   }
 });
 

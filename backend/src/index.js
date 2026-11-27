@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -118,6 +119,7 @@ app.get('/health', (req, res) => {
     service: 'Backend Node.js/Express SaaS',
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
+    database: mongoose.connection.readyState === 1 ? 'UP' : 'DOWN',
   });
 });
 
